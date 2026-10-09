@@ -2,7 +2,7 @@
 
 모의 데이터로 잔액 결과를 표시하고, 알림 문구를 생성하며, 로컬 기록을 조회하는 Python 예제입니다. GitHub Actions 진단 사례와 코드 선별 기록도 포함합니다.
 
-오프라인 예제와 명시적으로 실행하는 로그인·잔액 조회 어댑터를 포함합니다. Discord 전송·구매 기능은 없습니다. 자동 예약은 없으며, 공개 저장소의 GitHub Actions는 push·PR·수동 실행 시 모의 데이터 테스트만 수행합니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
+오프라인 예제와 명시적으로 실행하는 로그인·잔액 조회·Discord 전송 어댑터를 포함합니다. 구매 기능과 자동 예약은 없습니다. 공개 저장소의 GitHub Actions는 push·PR·수동 실행 시 모의 데이터 테스트만 수행합니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
 
 ## 실행
 
@@ -44,12 +44,29 @@ python3 -m monitor live --diagnostic
 
 `--diagnostic`을 생략하면 실제 잔액이 터미널에 표시됩니다. `--db local/results.sqlite3`를 명시하면 정규화한 조회 결과를 로컬에 기록합니다. 공개 Actions 로그에는 진단 모드만 사용하세요. 사이트 접근 차단·로그인 실패·응답 형식 변경 시 중단하며, 로그인 자동 재시도는 하지 않습니다. 자세한 검증 상태는 [실서비스 진단 기록](docs/live-diagnostics.md)을 확인하세요.
 
+## Discord 알림
+
+환경 변수 `DISCORD_WEBHOOK_URL`에 웹훅을 설정한 환경에서 실행합니다. 웹훅은 명령 인수나 저장소 파일에 넣지 않습니다. `requirements-live.txt`의 선택적 의존성이 필요합니다.
+
+```bash
+# 계정 조회 없이 고정 테스트 메시지 한 건 전송
+python3 -m monitor notify-test
+
+# 실제 조회 결과를 Discord에 전송: 성공하면 실제 잔액을 포함
+python3 -m monitor live --diagnostic --notify
+```
+
+`--notify`를 명시하지 않으면 `live`는 Discord에 전송하지 않습니다. `--diagnostic`은 터미널 로그를 숨기는 옵션이며, `--notify`로 보내는 메시지의 실제 잔액까지 숨기지는 않습니다. 조회 실패 시에는 금액 없이 미확인·실패 상태를 전송하고 종료 코드 1을 반환합니다.
+
+전송 성공은 `message_verified`로 출력하며 메시지 본문·웹훅·메시지 ID를 로그에 남기지 않습니다. 전송이나 재조회 검증이 실패하면 종료 코드 1을 반환합니다. 시간 초과나 `readback_unconfirmed` 상황에서는 이미 메시지가 전송됐을 수 있으므로 채널을 확인한 후 수동으로 재실행하세요. [전송 검증 기록](docs/discord-delivery.md)에 동작과 실제 테스트 결과를 정리합니다.
+
 ## 문서
 
 - [블로그 게시용 글 초안](docs/blog.md): 두 저장소의 알림 출처를 실행 시각과 문구로 구분하고, API 접근 차단과 잔액 조회 오류를 진단한 과정
 - [공개 프로젝트 구성안](docs/repository-plan.md): 선별 기준, 확인한 기능과 미검증 기능, 공개 전 확인 항목
 - [기존 워크플로 중단 기록](docs/operations.md): 2026년 10월 9일 확인한 비활성화 상태
 - [코드 선별 및 검증](docs/code-review.md): 검토한 원본, 이전 범위, 테스트 항목
+- [Discord 전송 검증](docs/discord-delivery.md): 전송 확인·재조회·오류 처리
 
 ## 현재 확인한 범위
 

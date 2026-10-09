@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -23,14 +24,27 @@ def main(argv: list[str] | None = None) -> int:
     live = commands.add_parser("live", help="명시적으로 로그인해 잔액만 조회")
     live.add_argument("--diagnostic", action="store_true", help="금액 없이 단계·진단 코드만 출력")
     live.add_argument("--db", type=Path, help="지정하면 조회 결과를 로컬 DB에 기록")
+    live.add_argument("--notify", action="store_true", help="조회 결과를 Discord로 전송 (성공 시 실제 잔액 포함)")
+    commands.add_parser("notify-test", help="실제 계정·금액 없는 고정 Discord 테스트 메시지 전송")
     args = parser.parse_args(argv)
     try:
+        if args.command == "notify-test":
+            from .discord import send_message, test_message
+            delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), test_message())
+            print(json.dumps({"delivery": delivery.code}))
+            return 0 if delivery.ok else 1
         if args.command == "live":
             from .live import read_account
             outcome = read_account()
             if args.db is not None:
                 append_result(args.db, outcome.result)
             print(outcome.diagnostic() if args.diagnostic else format_notification(outcome.result))
+            if args.notify:
+                from .discord import send_message
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_notification(outcome.result))
+                print(json.dumps({"delivery": delivery.code}))
+                if not delivery.ok:
+                    return 1
             return 0 if outcome.result.status == "ok" else 1
         if args.command == "records":
             for result in read_results(args.db):
