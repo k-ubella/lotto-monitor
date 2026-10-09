@@ -37,4 +37,15 @@
 
 검증한 코드 커밋은 `aa67962`이며 [검증 실행](https://github.com/k-ubella/vibe-lotto/actions/runs/37903488963)은 비공개 저장소 접근 권한이 필요하다. 테스트 메시지에는 실제 계정·잔액을 포함하지 않았고, 웹훅은 공개 저장소로 복사하지 않았다. 총 44개 로컬 테스트가 통과했다. 실제 전송에 사용한 코드의 Python 3.10·3.12 CI도 성공했다.
 
-실제 계정 잔액을 Discord에 보내는 통합 경로는 모의 응답으로 검증했으며, 이번 실전송에서는 실행하지 않았다. 예약·반복 전송과 장기간 운영은 검증하지 않았다. 기존 예약 작업 3개는 계속 `disabled_manually` 상태다.
+## 실제 잔액 알림 통합 검증
+
+2026년 10월 9일 17:19 한국시간, 수동 `Monitor Live Balance Notification`에서 실제 계정의 잔액을 조회하고 기존 Discord 채널에 알림 한 건을 전송했다. 전송 후 다시 조회한 메시지의 ID와 내용이 전송한 값과 일치했다. 검증한 코드 커밋은 `95afe978d6e28588827d9c77122eb7d173bf9599`이며 [통합 검증 실행](https://github.com/k-ubella/vibe-lotto/actions/runs/37904187584)은 비공개 저장소 접근 권한이 필요하다.
+
+```json
+{"status": "ok", "stage": "balance", "code": "balance_verified"}
+{"delivery": "message_verified"}
+```
+
+위 고정 코드만 로그에 출력했다. 실제 금액은 Discord 메시지에 포함했으며, 공개 저장소·문서·Actions 로그에는 포함하지 않았다. 계정·비밀번호·웹훅은 기존 비공개 저장소의 Secrets에서만 사용했다. 구매·충전·출금·개인 서버 기록 작업은 호출하지 않았다.
+
+수동 워크플로는 `workflow_dispatch`만 허용한다. `concurrency`로 같은 워크플로가 동시에 실행되지 않게 했으며, 서로 다른 수동 요청은 순서대로 실행될 수 있다. 예약·반복 전송과 장기간 운영은 검증하지 않았다. 기존 예약 작업 3개는 계속 `disabled_manually` 상태다.
