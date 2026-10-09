@@ -86,9 +86,13 @@ class PurchaseOutcome:
                            "requested": self.requested, "purchased": len(self.games), **self.sources})
 
 
-def _footer(outcome: PurchaseOutcome) -> str:
-    when = datetime.fromisoformat(outcome.observed_at).astimezone(KST)
+def _footer_time(observed_at: str) -> str:
+    when = datetime.fromisoformat(observed_at).astimezone(KST)
     return f"🕗 {when:%Y-%m-%d} ({'월화수목금토일'[when.weekday()]}) {when:%H:%M} KST · lotto-monitor"
+
+
+def _footer(outcome: PurchaseOutcome) -> str:
+    return _footer_time(outcome.observed_at)
 
 
 def format_purchase(outcome: PurchaseOutcome) -> str:

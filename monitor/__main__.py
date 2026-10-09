@@ -31,6 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     buy.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드만 출력")
     buy.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (성공 시 번호·잔액 포함)")
     buy.add_argument("--record", type=Path, help="구매 요청을 보낸 경우 회차·번호를 CSV에 추가 (잔액 제외)")
+    draw = commands.add_parser("check", help="공개 당첨번호와 records/purchases.csv를 대조 (로그인 없음)")
+    draw.add_argument("--round", type=int, help="확인할 회차 (기본: 가장 최근 추첨 회차)")
+    draw.add_argument("--records", type=Path, default=Path("records"), help="구매 기록 폴더 (기본 records)")
+    draw.add_argument("--save", action="store_true", help="당첨번호와 게임별 결과를 records/에 추가")
+    draw.add_argument("--diagnostic", action="store_true", help="번호 없이 상태·진단 코드만 출력")
+    draw.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (이미 기록된 회차는 전송 안 함)")
     commands.add_parser("notify-test", help="실제 계정·금액 없는 고정 Discord 테스트 메시지 전송")
     args = parser.parse_args(argv)
     try:
@@ -52,6 +58,19 @@ def main(argv: list[str] | None = None) -> int:
                 if not delivery.ok:
                     return 1
             return 0 if outcome.ok else 1
+        if args.command == "check":
+            from .winning import check_from_environment, format_check, save_check
+            outcome = check_from_environment(args.records, args.round)
+            if args.save:
+                save_check(args.records, outcome)
+            print(outcome.diagnostic() if args.diagnostic else format_check(outcome))
+            if args.notify and outcome.status != "already_recorded":
+                from .discord import send_message
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_check(outcome))
+                print(json.dumps({"delivery": delivery.code}))
+                if not delivery.ok:
+                    return 1
+            return 1 if outcome.status == "error" else 0
         if args.command == "live":
             from .live import read_account
             outcome = read_account()
