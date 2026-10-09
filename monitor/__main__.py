@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     buy.add_argument("--dry-run", action="store_true", help="로그인·회차 확인까지만 하고 구매 요청은 보내지 않음")
     buy.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드만 출력")
     buy.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (성공 시 번호·잔액 포함)")
+    buy.add_argument("--record", type=Path, help="구매 요청을 보낸 경우 회차·번호를 CSV에 추가 (잔액 제외)")
     commands.add_parser("notify-test", help="실제 계정·금액 없는 고정 Discord 테스트 메시지 전송")
     args = parser.parse_args(argv)
     try:
@@ -39,8 +40,10 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"delivery": delivery.code}))
             return 0 if delivery.ok else 1
         if args.command == "buy":
-            from .purchase import buy_from_environment, format_purchase
+            from .purchase import append_records, buy_from_environment, format_purchase
             outcome = buy_from_environment(args.games, args.dry_run)
+            if args.record is not None:
+                append_records(args.record, outcome)
             print(outcome.diagnostic() if args.diagnostic else format_purchase(outcome))
             if args.notify:
                 from .discord import send_message

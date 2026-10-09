@@ -44,6 +44,49 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         # 공개 저장소 로그에는 진단 코드만 남기고 번호·잔액은 Discord로만 보낸다.
         run: |
-          args=(buy --games "$GAMES" --diagnostic --notify)
+          args=(buy --games "$GAMES" --diagnostic --notify --record "$RUNNER_TEMP/purchase/rows.csv")
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           python -m monitor "${args[@]}"
+      # 구매 요청을 보낸 경우에만 파일이 생긴다(점검 실행·요청 전 실패는 기록 없음).
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: purchase-rows
+          path: ${{ runner.temp }}/purchase/rows.csv
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # 쓰기 권한은 계정 Secrets가 없는 별도 job에서만 사용한다.
+  record:
+    needs: buy
+    if: always() && needs.buy.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - id: rows
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: purchase-rows
+          path: ${{ runner.temp }}/purchase
+      - uses: actions/checkout@v4
+        if: steps.rows.outcome == 'success'
+        with:
+          ref: main
+      - name: Commit purchase record (no balance)
+        if: steps.rows.outcome == 'success'
+        run: |
+          rows="$RUNNER_TEMP/purchase/rows.csv"
+          mkdir -p records
+          if [ -s records/purchases.csv ]; then tail -n +2 "$rows" >> records/purchases.csv; else cp "$rows" records/purchases.csv; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add records/purchases.csv
+          git commit -m "Record lotto purchase $(TZ=Asia/Seoul date +%F) [skip ci]"
+          for attempt in 1 2 3; do
+            git push && exit 0
+            git pull --rebase
+          done
+          exit 1

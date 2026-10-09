@@ -70,7 +70,7 @@ python3 -m monitor buy --games 1 --dry-run --diagnostic   # 로그인·회차 �
 python3 -m monitor buy --games 1 --diagnostic --notify    # 실제 구매 후 Discord 알림
 ```
 
-`LOTTO_USERNAME`, `LOTTO_PASSWORD` 환경 변수로 로그인한 뒤 구매 서버 준비 → 회차 확인 → 구매 요청 1회를 보냅니다. 구매 요청은 재시도하지 않습니다. 응답이 끊기면 `unconfirmed`로 끝나며 이미 구매됐을 수 있으므로 구매 내역을 확인한 뒤 재실행하세요. 성공 시 번호와 잔액은 Discord 메시지에만 포함하고, `--diagnostic` 로그에는 단계·진단 코드·게임 수만 남깁니다. 자세한 내용은 [자동 구매 운영](docs/purchase.md)을 확인하세요.
+`LOTTO_USERNAME`, `LOTTO_PASSWORD` 환경 변수로 로그인한 뒤 구매 서버 준비 → 회차 확인 → 구매 요청 1회를 보냅니다. 구매 요청은 재시도하지 않습니다. 응답이 끊기면 `unconfirmed`로 끝나며 이미 구매됐을 수 있으므로 구매 내역을 확인한 뒤 재실행하세요. 성공 시 번호와 잔액은 Discord 메시지에만 포함하고, `--diagnostic` 로그에는 단계·진단 코드·게임 수만 남깁니다. `--record 파일`을 주면 구매 요청을 보낸 실행의 회차·번호를 CSV에 추가합니다(잔액 제외). 워크플로는 이를 [`records/purchases.csv`](records/purchases.csv)에 커밋합니다. 2026년 10월 9일 실제 계정으로 점검 실행과 1게임 구매를 확인했습니다. 자세한 내용은 [자동 구매 운영](docs/purchase.md)을 확인하세요.
 
 ## 문서
 

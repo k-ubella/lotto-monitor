@@ -86,23 +86,62 @@ class PurchaseOutcome:
                            "requested": self.requested, "purchased": len(self.games), **self.sources})
 
 
+def _footer(outcome: PurchaseOutcome) -> str:
+    when = datetime.fromisoformat(outcome.observed_at).astimezone(KST)
+    return f"🕗 {when:%Y-%m-%d} ({'월화수목금토일'[when.weekday()]}) {when:%H:%M} KST · lotto-monitor"
+
+
 def format_purchase(outcome: PurchaseOutcome) -> str:
-    header = "[lotto-monitor / 로또6/45 자동구매]"
+    """Discord markdown; numbers are aligned in a code block so they read like a ticket."""
+    round_label = f"{outcome.round}회" if outcome.round else "회차 미확인"
     if outcome.status == "ok":
-        lines = [f"{header} {outcome.round}회 {len(outcome.games)}게임 구매 완료"]
-        lines += [f"{g.slot} [{g.mode}] " + " ".join(f"{n:02d}" for n in g.numbers) for g in outcome.games]
-        lines.append(f"남은 잔액: {outcome.balance_krw:,}원" if outcome.balance_krw is not None else "남은 잔액: 확인 불가")
+        lines = [f"🎟️ **로또6/45 {round_label} · {len(outcome.games)}게임 구매 완료** ({len(outcome.games) * 1000:,}원)", "```"]
+        lines += [f"{g.slot}  {g.mode}  " + "  ".join(f"{n:02d}" for n in g.numbers) for g in outcome.games]
+        lines.append("```")
+        lines.append(f"💰 남은 잔액 **{outcome.balance_krw:,}원**" if outcome.balance_krw is not None else "💰 남은 잔액 확인 불가")
     elif outcome.status == "dry_run":
-        lines = [f"{header} 점검 실행: {outcome.round}회 구매 준비 확인 (실제 구매 안 함)"]
+        lines = [f"🧪 **점검 실행 · {round_label} 구매 준비 확인**", "실제 구매는 하지 않았습니다."]
     elif outcome.status == "unconfirmed":
-        lines = [f"{header} 구매 결과 미확인", "구매가 처리됐을 수 있습니다. 재실행 전에 구매 내역을 확인하세요.", f"진단 코드: {outcome.code}"]
-    else:
-        label = "구매 거절" if outcome.status == "rejected" else "구매 실패 (구매 요청 전 중단)"
-        lines = [f"{header} {label}", f"진단 코드: {outcome.code}"]
+        lines = [f"⚠️ **구매 결과 미확인 · {round_label}**", "구매가 처리됐을 수 있습니다. 재실행 전에 동행복권 구매 내역을 확인하세요.", f"진단 코드 `{outcome.code}`"]
+    elif outcome.status == "rejected":
+        lines = [f"❌ **구매 거절 · {round_label}**"]
         if outcome.remote_message:
-            lines.append(f"사유: {outcome.remote_message}")
-    lines.append(f"실행 시각: {outcome.observed_at}")
+            lines.append("사유: " + outcome.remote_message.replace("`", "'"))
+        lines.append(f"진단 코드 `{outcome.code}`")
+    else:
+        lines = ["🚫 **구매 실패** (구매 요청 전 중단)", f"단계 `{outcome.stage}` · 진단 코드 `{outcome.code}`"]
+    lines.append(_footer(outcome))
     return "\n".join(lines)
+
+
+RECORD_FIELDS = ["purchased_at", "round", "status", "slot", "mode", "numbers"]
+
+
+def record_rows(outcome: PurchaseOutcome) -> list[dict]:
+    """Rows for the public purchase log: no balance, account or site message."""
+    if outcome.status not in ("ok", "rejected", "unconfirmed"):
+        return []  # No purchase request was sent.
+    base = {"purchased_at": outcome.observed_at, "round": outcome.round or "", "status": outcome.status}
+    if not outcome.games:
+        return [{**base, "slot": "", "mode": "", "numbers": ""}]
+    return [{**base, "slot": g.slot, "mode": g.mode, "numbers": " ".join(f"{n:02d}" for n in g.numbers)} for g in outcome.games]
+
+
+def append_records(path, outcome: PurchaseOutcome) -> int:
+    import csv
+    from pathlib import Path
+    rows = record_rows(outcome)
+    if not rows:
+        return 0
+    path = Path(path)
+    new = not path.exists() or path.stat().st_size == 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RECORD_FIELDS)
+        if new:
+            writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
 
 
 class LottoPurchaser(BalanceReader):

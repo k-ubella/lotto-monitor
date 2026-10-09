@@ -1,13 +1,16 @@
 import contextlib
+import csv
 from datetime import datetime, timezone
 import io
 import json
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock as Mock, patch
 
 from monitor.__main__ import main
-from monitor.purchase import BUY_URL, GAME_PAGE, READY_URL, LottoPurchaser, format_purchase, input_values, next_draw_dates, parse_game
+from monitor.purchase import BUY_URL, GAME_PAGE, READY_URL, LottoPurchaser, append_records, format_purchase, record_rows, input_values, next_draw_dates, parse_game
 from tests.test_live import response, sequence
 
 
@@ -51,10 +54,30 @@ class PurchaseTests(unittest.TestCase):
         self.assertEqual([g["alpabet"] for g in json.loads(data["param"])], ["A", "B"])
         self.assertEqual(data["ROUND_DRAW_DATE"], "2026-10-10")
         message = format_purchase(outcome)
-        self.assertIn("1245회 2게임 구매 완료", message)
-        self.assertIn("A [자동] 01 02 04 27 39 44", message)
-        self.assertIn("3,000원", message)
+        self.assertIn("로또6/45 1245회 · 2게임 구매 완료** (2,000원)", message)
+        self.assertIn("```\nA  자동  01  02  04  27  39  44\nB  반자동  11  23  25  27  28  45\n```", message)
+        self.assertIn("남은 잔액 **3,000원**", message)
+        self.assertRegex(message, r"🕗 \d{4}-\d{2}-\d{2} \([월화수목금토일]\) \d{2}:\d{2} KST")
+        self.assertLessEqual(len(message), 2000)
         self.assertNotIn("44", outcome.diagnostic())
+
+    def test_records_keep_numbers_but_never_balance(self):
+        outcome = buyer(purchase_session(response(SUCCESS), response({"data": {"userMndp": {"totalAmt": 3000}}}))).buy("example", "example", 2)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "records" / "purchases.csv"
+            self.assertEqual(append_records(path, outcome), 2)
+            append_records(path, outcome)
+            rows = list(csv.DictReader(path.open(encoding="utf-8")))
+            self.assertEqual(len(rows), 4)
+            self.assertEqual((rows[0]["round"], rows[0]["slot"], rows[0]["numbers"], rows[0]["status"]), ("1245", "A", "01 02 04 27 39 44", "ok"))
+            self.assertNotIn("3000", path.read_text(encoding="utf-8"))
+
+    def test_records_skip_runs_without_purchase_request(self):
+        dry = buyer(purchase_session()).buy("example", "example", 1, dry_run=True)
+        rejected = buyer(purchase_session(response({"result": {"resultMsg": "구매한도 초과"}}))).buy("example", "example", 1)
+        self.assertEqual(record_rows(dry), [])
+        self.assertEqual([(r["status"], r["numbers"]) for r in record_rows(rejected)], [("rejected", "")])
+        self.assertNotIn("구매한도", str(record_rows(rejected)))
 
     def test_dry_run_never_posts_purchase(self):
         session = purchase_session()
