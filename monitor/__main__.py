@@ -20,8 +20,18 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--db", type=Path, help="지정하면 정규화한 결과를 로컬 DB에 기록")
     records = commands.add_parser("records", help="로컬 기록 읽기 전용 조회")
     records.add_argument("db", type=Path)
+    live = commands.add_parser("live", help="명시적으로 로그인해 잔액만 조회")
+    live.add_argument("--diagnostic", action="store_true", help="금액 없이 단계·진단 코드만 출력")
+    live.add_argument("--db", type=Path, help="지정하면 조회 결과를 로컬 DB에 기록")
     args = parser.parse_args(argv)
     try:
+        if args.command == "live":
+            from .live import read_account
+            outcome = read_account()
+            if args.db is not None:
+                append_result(args.db, outcome.result)
+            print(outcome.diagnostic() if args.diagnostic else format_notification(outcome.result))
+            return 0 if outcome.result.status == "ok" else 1
         if args.command == "records":
             for result in read_results(args.db):
                 print(format_notification(result))
