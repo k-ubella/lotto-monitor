@@ -4,7 +4,7 @@
 
 기존 `vibe-lotto`를 참고하되 실제 구매 기능과 구매 워크플로는 제외한다. 검토 대상은 알림 포맷, 조회 결과 표시, 읽기 전용 기록 화면, 모의 데이터 기반 검증이다. 실제 잔액 조회는 인증·응답 구조가 검증되기 전 정상 기능으로 소개하지 않는다.
 
-공개 저장소 이름: `lotto-monitor`. 문서로 시작한 뒤 오프라인 잔액 결과·알림 문구·SQLite 기록·모의 데이터 테스트를 추가했다. 상세 선별 근거와 검증 범위는 [코드 검토 기록](code-review.md)에 정리했다. 실제 서비스 연동은 아직 구현하지 않았다.
+공개 저장소 이름: `lotto-monitor`. 문서로 시작한 뒤 오프라인 잔액 결과·알림 문구·SQLite 기록·모의 데이터 테스트와 선택적 읽기 전용 조회 어댑터를 추가했다. 상세 선별 근거는 [코드 검토 기록](code-review.md), 실제 계정 연동의 검증 상태는 [실서비스 진단 기록](live-diagnostics.md)에 정리했다.
 
 ## 선별 기준
 
@@ -37,11 +37,15 @@ README.md
 monitor/balance.py           # 검증된 결과와 알림 문구
 monitor/records.py           # 로컬 SQLite 저장 및 읽기 전용 조회
 monitor/__main__.py          # 오프라인 CLI
+monitor/live.py              # 명시적으로 실행하는 로그인·잔액 조회
+requirements-live.txt        # 조회 어댑터의 선택적 의존성
 tests/fixtures/              # 모의 데이터만
 tests/test_monitor.py
+tests/test_live.py
 .github/workflows/test.yml   # 모의 데이터 테스트, 예약 없음
 docs/blog.md
 docs/code-review.md
+docs/live-diagnostics.md
 ```
 
-외부 패키지가 없어 의존성 파일은 추가하지 않았다. 라이선스 지정과 실서비스 조회·전송 어댑터는 후속 검토 항목이다.
+오프라인 예제는 외부 패키지가 필요 없다. 실제 조회는 선택적 의존성을 설치하고 환경 변수로 자격 증명을 제공해야 한다. 라이선스 지정, 실서비스 조회의 운영 검증, 전송 어댑터는 후속 검토 항목이다.

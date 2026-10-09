@@ -13,3 +13,9 @@
 `lotoManager/.github/workflows/balance-check.yml`은 수동 전용이며 active 상태다. 자동 예약은 없다. 다른 서버·서비스의 스케줄러는 이번 점검 대상이 아니므로 중단됐다고 주장하지 않는다.
 
 이 기록은 확인 당시 상태이며, 사용자가 나중에 워크플로를 활성화하거나 설정을 바꾸면 현재 상태가 달라질 수 있다.
+
+## 같은 날 추가한 수동 조회 진단
+
+`vibe-lotto/.github/workflows/monitor-balance-diagnostic.yml`을 추가했다. `workflow_dispatch`만 허용하며 예약 실행은 없다. 검토한 `lotto-monitor`의 전체 커밋 SHA를 고정해 체크아웃하고, 기존 비공개 Secrets로 로그인·잔액 조회를 실행한다. 단계·고정 진단 코드만 출력하며 금액·계정·원본 응답은 출력하지 않는다. Discord·개인 서버·구매 작업은 호출하지 않는다.
+
+수동 진단에서 실제 잔액 조회 성공을 확인한 뒤에도 기존 예약 워크플로 3개는 `disabled_manually` 상태로 유지했다. 상세 결과는 [실서비스 진단 기록](live-diagnostics.md)에 정리했다.

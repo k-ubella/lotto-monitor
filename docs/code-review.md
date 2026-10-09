@@ -2,6 +2,8 @@
 
 검토일: 2026년 10월 9일, 한국시간.
 
+이 문서는 첫 번째 오프라인 구현 단계의 선별 기록이다. 이후 추가한 로그인·잔액 조회 어댑터의 상태는 [실서비스 진단 기록](live-diagnostics.md)에 정리했다.
+
 ## 검토한 원본
 
 `vibe-lotto`의 `notification.py`, `db.py`, `controller.py`, `common.py`, `schema.sql`, `requirements.txt`, `README.md`를 검토했다. 확인한 기준 커밋은 `2ebb02791cebe24e9ae34bdd304333685fe99c6f`다. 원본 파일과 Git 이력은 새 저장소에 복사하지 않았다.
