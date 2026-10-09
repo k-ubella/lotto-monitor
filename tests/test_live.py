@@ -140,6 +140,16 @@ class LiveTests(unittest.TestCase):
             self.assertEqual(main(["live", "--diagnostic"]), 1)
         self.assertEqual(json.loads(output.getvalue())["code"], "credentials_missing")
 
+    @unittest.skipUnless(importlib.util.find_spec("requests"), "optional live dependencies not installed")
+    def test_network_failures_are_classified_without_remote_text(self):
+        from requests import exceptions
+        for error_type, code in [(exceptions.ConnectTimeout, "connect_timeout"), (exceptions.ReadTimeout, "read_timeout"), (exceptions.SSLError, "tls_error"), (exceptions.ConnectionError, "connection_error")]:
+            with self.subTest(code=code):
+                session = session_responses(error_type("private-response-text"))
+                outcome = BalanceReader(session).read("example", "example")
+                self.assertEqual(outcome.code, code)
+                self.assertNotIn("private-response", outcome.diagnostic())
+
 
 if __name__ == "__main__":
     unittest.main()

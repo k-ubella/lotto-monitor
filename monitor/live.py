@@ -150,9 +150,25 @@ class BalanceReader:
             unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing"}
             result = BalanceResult(now, "unavailable" if unavailable else "error", None, "dhlottery")
             return LiveOutcome(result, self.stage, failure.code)
-        except Exception:
+        except Exception as error:
             # Session/crypto exceptions may include request bodies, URLs or identifiers.
-            return LiveOutcome(BalanceResult(now, "error", None, "dhlottery"), self.stage, "transport_or_crypto_error")
+            code = "transport_or_crypto_error"
+            try:
+                from requests import exceptions
+            except ImportError:
+                pass
+            else:
+                for error_type, diagnostic_code in [
+                    (exceptions.ConnectTimeout, "connect_timeout"),
+                    (exceptions.ReadTimeout, "read_timeout"),
+                    (exceptions.SSLError, "tls_error"),
+                    (exceptions.ConnectionError, "connection_error"),
+                    (exceptions.Timeout, "request_timeout"),
+                ]:
+                    if isinstance(error, error_type):
+                        code = diagnostic_code
+                        break
+            return LiveOutcome(BalanceResult(now, "error", None, "dhlottery"), self.stage, code)
 
 
 def read_account() -> LiveOutcome:
