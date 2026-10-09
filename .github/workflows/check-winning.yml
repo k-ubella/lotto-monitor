@@ -51,7 +51,7 @@ jobs:
           python -m monitor "${args[@]}"
       - name: Commit draw and winning records
         run: |
-          git add records/
+          mkdir -p records && git add records/
           if git diff --cached --quiet; then echo "no new records"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
