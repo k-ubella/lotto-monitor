@@ -1,4 +1,4 @@
-"""Offline fixture import and local record display."""
+"""Offline fixture import, local record display and explicit live commands."""
 
 from __future__ import annotations
 
@@ -25,6 +25,11 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--diagnostic", action="store_true", help="금액 없이 단계·진단 코드만 출력")
     live.add_argument("--db", type=Path, help="지정하면 조회 결과를 로컬 DB에 기록")
     live.add_argument("--notify", action="store_true", help="조회 결과를 Discord로 전송 (성공 시 실제 잔액 포함)")
+    buy = commands.add_parser("buy", help="로또6/45 자동번호 구매 (실행당 구매 요청 1회, 재시도 없음)")
+    buy.add_argument("--games", type=int, default=1, choices=range(1, 6), help="구매할 게임 수 1~5 (기본 1)")
+    buy.add_argument("--dry-run", action="store_true", help="로그인·회차 확인까지만 하고 구매 요청은 보내지 않음")
+    buy.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드만 출력")
+    buy.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (성공 시 번호·잔액 포함)")
     commands.add_parser("notify-test", help="실제 계정·금액 없는 고정 Discord 테스트 메시지 전송")
     args = parser.parse_args(argv)
     try:
@@ -33,6 +38,17 @@ def main(argv: list[str] | None = None) -> int:
             delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), test_message())
             print(json.dumps({"delivery": delivery.code}))
             return 0 if delivery.ok else 1
+        if args.command == "buy":
+            from .purchase import buy_from_environment, format_purchase
+            outcome = buy_from_environment(args.games, args.dry_run)
+            print(outcome.diagnostic() if args.diagnostic else format_purchase(outcome))
+            if args.notify:
+                from .discord import send_message
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_purchase(outcome))
+                print(json.dumps({"delivery": delivery.code}))
+                if not delivery.ok:
+                    return 1
+            return 0 if outcome.ok else 1
         if args.command == "live":
             from .live import read_account
             outcome = read_account()

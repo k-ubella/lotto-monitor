@@ -2,7 +2,7 @@
 
 모의 데이터로 잔액 결과를 표시하고, 알림 문구를 생성하며, 로컬 기록을 조회하는 Python 예제입니다. GitHub Actions 진단 사례와 코드 선별 기록도 포함합니다.
 
-오프라인 예제와 로그인·잔액 조회·Discord 전송 어댑터를 포함합니다. 구매 기능은 없습니다. 공개 저장소의 GitHub Actions는 모의 데이터 테스트만 수행하며, 실제 잔액 알림은 기존 비공개 저장소에서 매주 토요일 오전 9시 한국시간으로 예약했습니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
+오프라인 예제와 로그인·잔액 조회·Discord 전송 어댑터, 로또6/45 자동번호 구매 기능을 포함합니다. 이 저장소의 `Buy Lotto (weekdays)` 워크플로가 월~금 오전 8시 55분 한국시간에 1게임씩 구매하며, 실제 잔액 알림은 기존 비공개 저장소에서 매주 토요일 오전 9시 한국시간으로 예약했습니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
 
 ## 실행
 
@@ -62,6 +62,16 @@ python3 -m monitor live --diagnostic --notify
 
 기존 비공개 `vibe-lotto`에서는 `Monitor Live Balance Notification`이 매주 토요일 오전 9시 한국시간에 잔액 알림을 실행합니다. Actions의 `Run workflow`로 수동 실행도 가능합니다. 검토한 공개 코드의 전체 SHA를 고정하고 기존 Secrets를 사용합니다. [예약 운영 안내](docs/schedule.md)에 실행 위치와 중단 방법을 정리했습니다.
 
+## 자동 구매
+
+```bash
+python3 -m pip install -r requirements-live.txt
+python3 -m monitor buy --games 1 --dry-run --diagnostic   # 로그인·회차 확인만, 구매 요청 없음
+python3 -m monitor buy --games 1 --diagnostic --notify    # 실제 구매 후 Discord 알림
+```
+
+`LOTTO_USERNAME`, `LOTTO_PASSWORD` 환경 변수로 로그인한 뒤 구매 서버 준비 → 회차 확인 → 구매 요청 1회를 보냅니다. 구매 요청은 재시도하지 않습니다. 응답이 끊기면 `unconfirmed`로 끝나며 이미 구매됐을 수 있으므로 구매 내역을 확인한 뒤 재실행하세요. 성공 시 번호와 잔액은 Discord 메시지에만 포함하고, `--diagnostic` 로그에는 단계·진단 코드·게임 수만 남깁니다. 자세한 내용은 [자동 구매 운영](docs/purchase.md)을 확인하세요.
+
 ## 문서
 
 - [블로그 게시용 글 초안](docs/blog.md): 두 저장소의 알림 출처를 실행 시각과 문구로 구분하고, API 접근 차단과 잔액 조회 오류를 진단한 과정
@@ -70,6 +80,7 @@ python3 -m monitor live --diagnostic --notify
 - [코드 선별 및 검증](docs/code-review.md): 검토한 원본, 이전 범위, 테스트 항목
 - [Discord 전송 검증](docs/discord-delivery.md): 전송 확인·재조회·오류 처리
 - [예약 운영 안내](docs/schedule.md): 토요일 오전 9시 알림과 자격 증명 사용 방식
+- [자동 구매 운영](docs/purchase.md): 월~금 구매 워크플로, Secrets, 점검 실행과 중단 방법
 
 ## 현재 확인한 범위
 

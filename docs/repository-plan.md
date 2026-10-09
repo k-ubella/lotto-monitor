@@ -2,7 +2,7 @@
 
 ## 범위
 
-기존 `vibe-lotto`를 참고하되 실제 구매 기능과 구매 워크플로는 제외한다. 검토 대상은 알림 포맷, 조회 결과 표시, 읽기 전용 기록 화면, 모의 데이터 기반 검증이다. 실제 잔액 조회는 인증·응답 구조가 검증되기 전 정상 기능으로 소개하지 않는다.
+기존 `vibe-lotto`를 참고한다. 처음에는 구매 기능을 제외했으나, 2026년 10월 9일 사용자 요청으로 월~금 로또6/45 자동 구매를 이 저장소로 옮겼다([자동 구매 운영](purchase.md)). 검토 대상은 알림 포맷, 조회 결과 표시, 읽기 전용 기록 화면, 모의 데이터 기반 검증이다. 실제 잔액 조회는 인증·응답 구조가 검증되기 전 정상 기능으로 소개하지 않는다.
 
 공개 저장소 이름: `lotto-monitor`. 문서로 시작한 뒤 오프라인 잔액 결과·알림 문구·SQLite 기록·모의 데이터 테스트와 선택적 읽기 전용 조회 어댑터를 추가했다. 상세 선별 근거는 [코드 검토 기록](code-review.md), 실제 계정 연동의 검증 상태는 [실서비스 진단 기록](live-diagnostics.md)에 정리했다.
 
@@ -14,7 +14,7 @@
 | 조회·알림 코드 | JSON 기반 잔액 조회·문구 생성·Discord 전송을 분리 구현 | 실제 잔액 조회·전송·재조회 통합 검증 성공; 예약·장기 운영 미검증 |
 | 기록 화면 | 비식별 모의 데이터부터 검증 | 현재 대시보드 실행은 검증하지 않음 |
 | GitHub Actions | 수동 테스트·모의 응답 검증부터 구성 | 예약 워크플로 3개 비활성화 확인 |
-| 구매 코드·구매 워크플로 | 공개 초안 대상에서 제외 | 실제 구매 자동화의 선별·복구·테스트는 진행하지 않음 |
+| 구매 코드·구매 워크플로 | `vibe-lotto`의 구매 요청 형식을 검증된 로그인 위에 재구성 | 모의 응답 테스트 완료; 실제 구매·예약 실행 미검증 |
 
 알림이 한 번 성공했다고 인증·전체 API·화면이 모두 정상이라고 판단하지 않는다. 기존 코드 전체를 “잘 되는 코드”로 분류할 증거는 없다.
 
@@ -39,12 +39,15 @@ monitor/records.py           # 로컬 SQLite 저장 및 읽기 전용 조회
 monitor/__main__.py          # 오프라인 CLI
 monitor/live.py              # 명시적으로 실행하는 로그인·잔액 조회
 monitor/discord.py           # 명시적 전송과 메시지 재조회 검증
+monitor/purchase.py          # 로또6/45 자동번호 구매 (요청 1회, 재시도 없음)
 requirements-live.txt        # 조회 어댑터의 선택적 의존성
 tests/fixtures/              # 모의 데이터만
 tests/test_monitor.py
 tests/test_live.py
 tests/test_discord.py
+tests/test_purchase.py
 .github/workflows/test.yml   # 모의 데이터 테스트, 예약 없음
+.github/workflows/buy-lotto.yml  # 월~금 08:55 KST 구매
 docs/blog.md
 docs/code-review.md
 docs/live-diagnostics.md
