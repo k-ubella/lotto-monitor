@@ -14,6 +14,7 @@ from .balance import BalanceResult, parse_balance
 
 ORIGIN = "https://www.dhlottery.co.kr"
 BALANCE_PATH = "/mypage/selectUserMndp.do"
+ALLOWED_HOSTS = {"www.dhlottery.co.kr", "ol.dhlottery.co.kr"}
 
 
 class ReadFailure(Exception):
@@ -52,6 +53,24 @@ def encrypt_credentials(username: str, password: str, modulus: str, exponent: st
         raise ReadFailure("invalid_rsa_key") from None
 
 
+def transport_code(error: Exception) -> str:
+    # Session/crypto exceptions may include request bodies, URLs or identifiers.
+    try:
+        from requests import exceptions
+    except ImportError:
+        return "transport_or_crypto_error"
+    for error_type, code in [
+        (exceptions.ConnectTimeout, "connect_timeout"),
+        (exceptions.ReadTimeout, "read_timeout"),
+        (exceptions.SSLError, "tls_error"),
+        (exceptions.ConnectionError, "connection_error"),
+        (exceptions.Timeout, "request_timeout"),
+    ]:
+        if isinstance(error, error_type):
+            return code
+    return "transport_or_crypto_error"
+
+
 @dataclass(frozen=True)
 class LiveOutcome:
     result: BalanceResult
@@ -69,7 +88,7 @@ class BalanceReader:
         self.encrypt = encrypt
         self.stage = "start"
 
-    def _request(self, method: str, path: str, *, allow_unauthenticated: bool = False, **kwargs):
+    def _request(self, method: str, path: str, *, allow_unauthenticated: bool = False, extra_headers: dict | None = None, **kwargs):
         url = urljoin(ORIGIN, path)
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -86,9 +105,10 @@ class BalanceReader:
             })
         if path == "/login/selectRsaModulus.do":
             headers.update({"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"})
+        headers.update(extra_headers or {})
         for _ in range(4):
             parsed = urlsplit(url)
-            if (parsed.scheme, parsed.netloc) != ("https", "www.dhlottery.co.kr"):
+            if parsed.scheme != "https" or parsed.netloc not in ALLOWED_HOSTS:
                 raise ReadFailure("unexpected_redirect")
             response = self.session.request(
                 method, url, headers=headers, timeout=(10, 20), allow_redirects=False, **kwargs
@@ -124,56 +144,46 @@ class BalanceReader:
         except ValueError:
             raise ReadFailure("invalid_json") from None
 
+    def login(self, username: str, password: str) -> int:
+        """Submit one login and prove it by reading the balance. Never retries credentials."""
+        if not username or not password:
+            raise ReadFailure("credentials_missing")
+        self.stage = "login_page"
+        self._request("GET", "/login")
+        self.stage = "unauthenticated_baseline"
+        response = self._request("GET", BALANCE_PATH, allow_unauthenticated=True)
+        if response.status_code == 200:
+            try:
+                extract_balance(self._json(response))
+            except ReadFailure:
+                pass  # Login is needed; a cookie alone is never proof of authentication.
+            else:
+                raise ReadFailure("authentication_unverified")
+        self.stage = "rsa_key"
+        payload = self._json(self._request("GET", "/login/selectRsaModulus.do"))
+        key = payload.get("data", payload) if isinstance(payload, dict) else None
+        if not isinstance(key, dict) or not all(isinstance(key.get(k), str) and key[k] for k in ("rsaModulus", "publicExponent")):
+            raise ReadFailure("rsa_key_missing")
+        data = self.encrypt(username, password, key["rsaModulus"], key["publicExponent"])
+        self.stage = "login_submit"
+        self._request("POST", "/login/securityLoginCheck.do", data=data)
+        return self.read_balance()
+
+    def read_balance(self) -> int:
+        self.stage = "balance"
+        return extract_balance(self._json(self._request("GET", BALANCE_PATH)))
+
     def read(self, username: str, password: str) -> LiveOutcome:
         now = datetime.now(timezone.utc).isoformat()
         try:
-            if not username or not password:
-                raise ReadFailure("credentials_missing")
-            self.stage = "login_page"
-            self._request("GET", "/login")
-            self.stage = "unauthenticated_baseline"
-            response = self._request("GET", BALANCE_PATH, allow_unauthenticated=True)
-            if response.status_code == 200:
-                try:
-                    extract_balance(self._json(response))
-                except ReadFailure:
-                    pass  # Login is needed; a cookie alone is never proof of authentication.
-                else:
-                    raise ReadFailure("authentication_unverified")
-            self.stage = "rsa_key"
-            payload = self._json(self._request("GET", "/login/selectRsaModulus.do"))
-            key = payload.get("data", payload) if isinstance(payload, dict) else None
-            if not isinstance(key, dict) or not all(isinstance(key.get(k), str) and key[k] for k in ("rsaModulus", "publicExponent")):
-                raise ReadFailure("rsa_key_missing")
-            data = self.encrypt(username, password, key["rsaModulus"], key["publicExponent"])
-            self.stage = "login_submit"
-            self._request("POST", "/login/securityLoginCheck.do", data=data)
-            self.stage = "balance"
-            amount = extract_balance(self._json(self._request("GET", BALANCE_PATH)))
+            amount = self.login(username, password)
             return LiveOutcome(BalanceResult(now, "ok", amount, "dhlottery"), self.stage, "balance_verified")
         except ReadFailure as failure:
             unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing"}
             result = BalanceResult(now, "unavailable" if unavailable else "error", None, "dhlottery")
             return LiveOutcome(result, self.stage, failure.code)
         except Exception as error:
-            # Session/crypto exceptions may include request bodies, URLs or identifiers.
-            code = "transport_or_crypto_error"
-            try:
-                from requests import exceptions
-            except ImportError:
-                pass
-            else:
-                for error_type, diagnostic_code in [
-                    (exceptions.ConnectTimeout, "connect_timeout"),
-                    (exceptions.ReadTimeout, "read_timeout"),
-                    (exceptions.SSLError, "tls_error"),
-                    (exceptions.ConnectionError, "connection_error"),
-                    (exceptions.Timeout, "request_timeout"),
-                ]:
-                    if isinstance(error, error_type):
-                        code = diagnostic_code
-                        break
-            return LiveOutcome(BalanceResult(now, "error", None, "dhlottery"), self.stage, code)
+            return LiveOutcome(BalanceResult(now, "error", None, "dhlottery"), self.stage, transport_code(error))
 
 
 def read_account() -> LiveOutcome:

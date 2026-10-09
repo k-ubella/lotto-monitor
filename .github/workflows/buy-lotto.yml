@@ -1,0 +1,49 @@
+name: Buy Lotto (weekdays)
+
+on:
+  schedule:
+    # 한국시간 월~금 08:55 = UTC 일~목 23:55. GitHub 혼잡 시 지연될 수 있다.
+    - cron: '55 23 * * 0-4'
+  workflow_dispatch:
+    inputs:
+      games:
+        description: '구매할 게임 수 (1-5)'
+        type: choice
+        options: ['1', '2', '3', '4', '5']
+        default: '1'
+      dry_run:
+        description: '점검만 하고 실제 구매는 하지 않음'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: buy-lotto
+  cancel-in-progress: false
+
+jobs:
+  buy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-live.txt
+      - name: Buy and send one verified Discord notification
+        env:
+          LOTTO_USERNAME: ${{ secrets.LOTTO_USERNAME }}
+          LOTTO_PASSWORD: ${{ secrets.LOTTO_PASSWORD }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GAMES: ${{ inputs.games || '1' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        # 공개 저장소 로그에는 진단 코드만 남기고 번호·잔액은 Discord로만 보낸다.
+        run: |
+          args=(buy --games "$GAMES" --diagnostic --notify)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python -m monitor "${args[@]}"
