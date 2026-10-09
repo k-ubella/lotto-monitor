@@ -69,7 +69,7 @@ class BalanceReader:
         self.encrypt = encrypt
         self.stage = "start"
 
-    def _request(self, method: str, path: str, **kwargs):
+    def _request(self, method: str, path: str, *, allow_unauthenticated: bool = False, **kwargs):
         url = urljoin(ORIGIN, path)
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -84,6 +84,8 @@ class BalanceReader:
                 "AJAX": "true",
                 "Referer": ORIGIN + "/mypage/home",
             })
+        if path == "/login/selectRsaModulus.do":
+            headers.update({"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"})
         for _ in range(4):
             parsed = urlsplit(url)
             if (parsed.scheme, parsed.netloc) != ("https", "www.dhlottery.co.kr"):
@@ -103,6 +105,8 @@ class BalanceReader:
                     method, kwargs = "GET", {}
                 continue
             if response.status_code in (401, 403):
+                if allow_unauthenticated:
+                    return response
                 raise ReadFailure("access_denied")
             if response.status_code == 429:
                 raise ReadFailure("rate_limited")
@@ -128,13 +132,14 @@ class BalanceReader:
             self.stage = "login_page"
             self._request("GET", "/login")
             self.stage = "unauthenticated_baseline"
-            response = self._request("GET", BALANCE_PATH)
-            try:
-                extract_balance(self._json(response))
-            except ReadFailure:
-                pass  # Login is needed; a cookie by itself is never proof of authentication.
-            else:
-                raise ReadFailure("authentication_unverified")
+            response = self._request("GET", BALANCE_PATH, allow_unauthenticated=True)
+            if response.status_code == 200:
+                try:
+                    extract_balance(self._json(response))
+                except ReadFailure:
+                    pass  # Login is needed; a cookie alone is never proof of authentication.
+                else:
+                    raise ReadFailure("authentication_unverified")
             self.stage = "rsa_key"
             payload = self._json(self._request("GET", "/login/selectRsaModulus.do"))
             key = payload.get("data", payload) if isinstance(payload, dict) else None

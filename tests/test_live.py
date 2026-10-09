@@ -73,6 +73,23 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(outcome.code, "authentication_unverified")
         self.assertEqual(session.request.call_count, 2)
 
+    def test_unauthenticated_401_or_403_allows_one_login_attempt(self):
+        for status in [401, 403]:
+            replies = sequence()
+            replies[1] = response(status=status, text="<html>authentication required</html>")
+            session = session_responses(*replies)
+            outcome = BalanceReader(session, Mock(return_value={})).read("example", "example")
+            self.assertEqual(outcome.code, "balance_verified")
+            self.assertEqual(sum(call.args[0] == "POST" for call in session.request.call_args_list), 1)
+            self.assertEqual(session.request.call_args_list[2].kwargs["headers"]["X-Requested-With"], "XMLHttpRequest")
+
+    def test_authenticated_403_still_fails(self):
+        replies = sequence()
+        replies[-1] = response(status=403)
+        outcome = BalanceReader(session_responses(*replies), Mock(return_value={})).read("example", "example")
+        self.assertEqual(outcome.code, "access_denied")
+        self.assertEqual(outcome.stage, "balance")
+
     def test_denied_and_rate_limited_requests_stop_without_retries(self):
         for status, code in [(403, "access_denied"), (429, "rate_limited"), (503, "http_error")]:
             session = session_responses(response(status=status))
