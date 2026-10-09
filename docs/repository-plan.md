@@ -4,7 +4,7 @@
 
 기존 `vibe-lotto`를 참고하되 실제 구매 기능과 구매 워크플로는 제외한다. 검토 대상은 알림 포맷, 조회 결과 표시, 읽기 전용 기록 화면, 모의 데이터 기반 검증이다. 실제 잔액 조회는 인증·응답 구조가 검증되기 전 정상 기능으로 소개하지 않는다.
 
-공개 저장소 이름: `lotto-monitor`. 초기 구성은 검토한 문서와 기본 안내다. 아래 코딩 구조는 향후 구현안이며, 현재 구현 또는 실행 검증이 완료됐다는 뜻은 아니다.
+공개 저장소 이름: `lotto-monitor`. 문서로 시작한 뒤 오프라인 잔액 결과·알림 문구·SQLite 기록·모의 데이터 테스트를 추가했다. 상세 선별 근거와 검증 범위는 [코드 검토 기록](code-review.md)에 정리했다. 실제 서비스 연동은 아직 구현하지 않았다.
 
 ## 선별 기준
 
@@ -29,20 +29,19 @@
 - 모의 데이터로 재현 가능한 테스트와 실행 문서를 제공한다.
 - 새 저장소 생성·공개와 블로그 게시 전에 결과물을 최종 검토한다.
 
-## 제안 구조
+## 현재 구조
 
 ```text
 README.md
-LICENSE
 .gitignore
-.env.example                 # 빈 값 또는 비밀이 아닌 예시만
-pyproject.toml
-src/monitor/notifications.py
-src/monitor/models.py
+monitor/balance.py           # 검증된 결과와 알림 문구
+monitor/records.py           # 로컬 SQLite 저장 및 읽기 전용 조회
+monitor/__main__.py          # 오프라인 CLI
 tests/fixtures/              # 모의 데이터만
-tests/test_notifications.py
-.github/workflows/test.yml   # 모의 응답 테스트
+tests/test_monitor.py
+.github/workflows/test.yml   # 모의 데이터 테스트, 예약 없음
 docs/blog.md
+docs/code-review.md
 ```
 
-위 구조는 향후 구현안이며, 현재 저장소에는 README, .gitignore, 문서 3개만 포함한다.
+외부 패키지가 없어 의존성 파일은 추가하지 않았다. 라이선스 지정과 실서비스 조회·전송 어댑터는 후속 검토 항목이다.

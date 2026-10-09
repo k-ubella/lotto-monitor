@@ -1,0 +1,41 @@
+"""Offline fixture import and local record display."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sqlite3
+import sys
+
+from .balance import BalanceResult, format_notification
+from .records import append_result, read_results
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="모의 JSON 결과와 로컬 기록을 확인합니다.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    demo = commands.add_parser("demo", help="모의 JSON으로 알림 문구 미리보기")
+    demo.add_argument("fixture", type=Path)
+    demo.add_argument("--db", type=Path, help="지정하면 정규화한 결과를 로컬 DB에 기록")
+    records = commands.add_parser("records", help="로컬 기록 읽기 전용 조회")
+    records.add_argument("db", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "records":
+            for result in read_results(args.db):
+                print(format_notification(result))
+            return 0
+        result = BalanceResult.from_dict(json.loads(args.fixture.read_text(encoding="utf-8")))
+        if args.db is not None:
+            append_result(args.db, result)
+        print(format_notification(result))
+        return 0 if result.status == "ok" else 1
+    except (OSError, ValueError, TypeError, sqlite3.Error):
+        # Do not echo raw input, database errors, or account response content.
+        print("입력 또는 로컬 기록 처리에 실패했습니다. 파일과 형식을 확인하세요.", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
