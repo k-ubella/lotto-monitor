@@ -29,3 +29,7 @@
 `vibe-lotto/.github/workflows/monitor-live-notification.yml`을 추가했다. `workflow_dispatch`만 허용하고 공개 코드 커밋 `95afe978d6e28588827d9c77122eb7d173bf9599`를 고정했다. 기존 비공개 Secrets로 `python -m monitor live --diagnostic --notify`를 실행해 로그인·잔액 조회·Discord 전송·재조회 검증이 성공했다. 실행은 2026년 10월 9일 17:19 한국시간에 완료됐다.
 
 금액은 Discord 메시지에만 포함했고 로그에는 고정 진단 코드만 남겼다. 같은 워크플로의 동시 실행은 `concurrency`로 제한했으며, 추가 수동 요청은 대기 후 실행될 수 있다. 기존 예약 워크플로 3개는 계속 `disabled_manually` 상태다. 현재 자동 예약은 추가하지 않았다.
+
+## 후속 설정: 토요일 오전 9시 잔액 알림 예약
+
+사용자가 매주 토요일 오전 9시 한국시간을 선택한 뒤, `monitor-live-notification.yml`에 `schedule`을 추가했다. `cron: "0 9 * * 6"`, `timezone: "Asia/Seoul"`이며 수동 실행도 유지한다. GitHub의 기본 브랜치에 설정이 저장됐고 워크플로는 `active`다. 기존 예약 워크플로 3개는 비활성화 상태를 유지했다. 첫 예정 시각은 2026년 10월 10일 오전 9시 한국시간이며, 아직 첫 예약 실행은 확인하지 않았다. [예약 운영 안내](schedule.md)에 상세 내용을 정리했다.

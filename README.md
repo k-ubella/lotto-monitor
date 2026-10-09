@@ -2,7 +2,7 @@
 
 모의 데이터로 잔액 결과를 표시하고, 알림 문구를 생성하며, 로컬 기록을 조회하는 Python 예제입니다. GitHub Actions 진단 사례와 코드 선별 기록도 포함합니다.
 
-오프라인 예제와 명시적으로 실행하는 로그인·잔액 조회·Discord 전송 어댑터를 포함합니다. 구매 기능과 자동 예약은 없습니다. 공개 저장소의 GitHub Actions는 push·PR·수동 실행 시 모의 데이터 테스트만 수행합니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
+오프라인 예제와 로그인·잔액 조회·Discord 전송 어댑터를 포함합니다. 구매 기능은 없습니다. 공개 저장소의 GitHub Actions는 모의 데이터 테스트만 수행하며, 실제 잔액 알림은 기존 비공개 저장소에서 매주 토요일 오전 9시 한국시간으로 예약했습니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
 
 ## 실행
 
@@ -60,7 +60,7 @@ python3 -m monitor live --diagnostic --notify
 
 전송 성공은 `message_verified`로 출력하며 메시지 본문·웹훅·메시지 ID를 로그에 남기지 않습니다. 전송이나 재조회 검증이 실패하면 종료 코드 1을 반환합니다. 시간 초과나 `readback_unconfirmed` 상황에서는 이미 메시지가 전송됐을 수 있으므로 채널을 확인한 후 수동으로 재실행하세요. [전송 검증 기록](docs/discord-delivery.md)에 동작과 실제 테스트 결과를 정리합니다.
 
-기존 비공개 `vibe-lotto`에서는 Actions의 `Monitor Live Balance Notification`을 선택한 뒤 `Run workflow`로 실제 잔액 알림을 한 번 실행할 수 있습니다. 검토한 공개 코드의 전체 SHA를 고정하고 기존 Secrets를 사용하며, 자동 예약은 없습니다.
+기존 비공개 `vibe-lotto`에서는 `Monitor Live Balance Notification`이 매주 토요일 오전 9시 한국시간에 잔액 알림을 실행합니다. Actions의 `Run workflow`로 수동 실행도 가능합니다. 검토한 공개 코드의 전체 SHA를 고정하고 기존 Secrets를 사용합니다. [예약 운영 안내](docs/schedule.md)에 실행 위치와 중단 방법을 정리했습니다.
 
 ## 문서
 
@@ -69,6 +69,7 @@ python3 -m monitor live --diagnostic --notify
 - [기존 워크플로 중단 기록](docs/operations.md): 2026년 10월 9일 확인한 비활성화 상태
 - [코드 선별 및 검증](docs/code-review.md): 검토한 원본, 이전 범위, 테스트 항목
 - [Discord 전송 검증](docs/discord-delivery.md): 전송 확인·재조회·오류 처리
+- [예약 운영 안내](docs/schedule.md): 토요일 오전 9시 알림과 자격 증명 사용 방식
 
 ## 현재 확인한 범위
 
