@@ -41,6 +41,12 @@ python3 -m monitor check --round 1246 --save # records/에 기록
 
 구매 기록이 없는 회차도 당첨번호는 `draws.csv`에 남긴다. 잔액·계정 정보는 기록하지 않는다.
 
+## 검증 상태
+
+모의 응답으로 회차 계산, 1~5등 판정(2등 보너스 포함), 미발표·형식 오류, 중복 기록 방지를 테스트했다.
+
+2026년 10월 9일 [수동 실행](https://github.com/k-ubella/lotto-monitor/actions/runs/37908799565)으로 1244회를 기록 없이 확인했다. GitHub Actions에서 공개 당첨번호 API 조회와 응답 해석(`draw_checked`), Discord 전송·재조회(`message_verified`)가 성공했다. 첫 실행은 `records/` 폴더가 없어 커밋 단계가 실패했고, 폴더를 만든 뒤 `git add`하도록 고쳤다. 예약 실행과 실제 구매 기록 대조·커밋은 아직 확인하지 않았다.
+
 ## 한계
 
 `purchases.csv`에 없는 구매는 확인하지 않는다. 2026년 10월 9일 수동 구매(1245회)는 기록 도입 전이라 포함되지 않는다.
