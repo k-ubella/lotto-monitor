@@ -2,7 +2,7 @@
 
 모의 데이터로 잔액 결과를 표시하고, 알림 문구를 생성하며, 로컬 기록을 조회하는 Python 예제입니다. GitHub Actions 진단 사례와 코드 선별 기록도 포함합니다.
 
-오프라인 예제와 로그인·잔액 조회·Discord 전송 어댑터, 로또6/45 자동번호 구매 기능을 포함합니다. 이 저장소의 `Buy Lotto (weekdays)` 워크플로가 월~금 오전 8시 55분 한국시간에 1게임씩 구매하며, 실제 잔액 알림은 기존 비공개 저장소에서 매주 토요일 오전 9시 한국시간으로 예약했습니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
+오프라인 예제와 로그인·잔액 조회·Discord 전송 어댑터, 로또6/45 자동번호 구매 기능을 포함합니다. 이 저장소의 `Buy Lotto (weekdays)` 워크플로가 월~금 오전 8시 55분 한국시간에 1게임씩 구매하며, `Balance Notification (Saturday)`가 매주 토요일 오전 9시 한국시간에 잔액을 알립니다. 기존 저장소의 Git 이력과 계정 파일은 가져오지 않았습니다.
 
 ## 실행
 
@@ -60,7 +60,7 @@ python3 -m monitor live --diagnostic --notify
 
 전송 성공은 `message_verified`로 출력하며 메시지 본문·웹훅·메시지 ID를 로그에 남기지 않습니다. 전송이나 재조회 검증이 실패하면 종료 코드 1을 반환합니다. 시간 초과나 `readback_unconfirmed` 상황에서는 이미 메시지가 전송됐을 수 있으므로 채널을 확인한 후 수동으로 재실행하세요. [전송 검증 기록](docs/discord-delivery.md)에 동작과 실제 테스트 결과를 정리합니다.
 
-기존 비공개 `vibe-lotto`에서는 `Monitor Live Balance Notification`이 매주 토요일 오전 9시 한국시간에 잔액 알림을 실행합니다. Actions의 `Run workflow`로 수동 실행도 가능합니다. 검토한 공개 코드의 전체 SHA를 고정하고 기존 Secrets를 사용합니다. [예약 운영 안내](docs/schedule.md)에 실행 위치와 중단 방법을 정리했습니다.
+이 저장소의 `Balance Notification (Saturday)`가 매주 토요일 오전 9시 한국시간에 잔액 알림을 실행합니다. 잔액이 다음 주 평일 구매액 5,000원보다 적으면 충전할 금액을 함께 알립니다. Actions의 `Run workflow`로 수동 실행도 가능합니다. 이전에 실행하던 `vibe-lotto`의 워크플로는 비활성화했습니다. [예약 운영 안내](docs/schedule.md)에 이력을 정리했습니다.
 
 ## 자동 구매
 
@@ -80,6 +80,14 @@ python3 -m monitor check --round 1246
 
 로그인 없이 공개 당첨번호를 조회해 `records/purchases.csv`의 해당 회차 번호와 대조합니다. `Check Lotto Winning (Saturday)` 워크플로가 토요일 21:30 KST에 실행해 결과를 Discord로 보내고 `records/draws.csv`, `records/winnings.csv`에 커밋합니다. 자세한 내용은 [토요일 당첨 확인](docs/winning.md)을 확인하세요.
 
+## 통계
+
+```bash
+python3 -m monitor stats
+```
+
+구매·당첨 기록으로 [`records/STATS.md`](records/STATS.md)를 만듭니다. 구매액·당첨금·손익·회수율, 등수와 일치 개수 분포, 회차별·월별 표, 번호 빈도를 담으며 기록이 커밋될 때마다 자동으로 갱신됩니다. 잔액은 포함하지 않습니다. 자세한 내용은 [통계](docs/stats.md)를 확인하세요.
+
 ## 문서
 
 - [블로그 게시용 글 초안](docs/blog.md): 두 저장소의 알림 출처를 실행 시각과 문구로 구분하고, API 접근 차단과 잔액 조회 오류를 진단한 과정
@@ -90,6 +98,7 @@ python3 -m monitor check --round 1246
 - [예약 운영 안내](docs/schedule.md): 토요일 오전 9시 알림과 자격 증명 사용 방식
 - [자동 구매 운영](docs/purchase.md): 월~금 구매 워크플로, Secrets, 점검 실행과 중단 방법
 - [토요일 당첨 확인](docs/winning.md): 당첨번호 대조, 등수 계산, 기록 파일
+- [통계](docs/stats.md): `records/STATS.md` 구성과 계산 기준
 
 ## 현재 확인한 범위
 

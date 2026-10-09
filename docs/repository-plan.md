@@ -41,6 +41,7 @@ monitor/live.py              # 명시적으로 실행하는 로그인·잔액 �
 monitor/discord.py           # 명시적 전송과 메시지 재조회 검증
 monitor/purchase.py          # 로또6/45 자동번호 구매 (요청 1회, 재시도 없음)
 monitor/winning.py           # 공개 당첨번호와 구매 기록 대조
+monitor/stats.py             # 구매·당첨 통계 (records/STATS.md)
 requirements-live.txt        # 조회 어댑터의 선택적 의존성
 tests/fixtures/              # 모의 데이터만
 tests/test_monitor.py
@@ -48,9 +49,11 @@ tests/test_live.py
 tests/test_discord.py
 tests/test_purchase.py
 tests/test_winning.py
+tests/test_stats.py
 .github/workflows/test.yml   # 모의 데이터 테스트, 예약 없음
 .github/workflows/buy-lotto.yml  # 월~금 08:55 KST 구매
 .github/workflows/check-winning.yml  # 토 21:30 KST 당첨 확인
+.github/workflows/balance.yml       # 토 09:00 KST 잔액 알림
 records/                     # 구매·당첨 기록 (잔액 제외)
 docs/blog.md
 docs/code-review.md

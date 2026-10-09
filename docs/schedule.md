@@ -1,5 +1,7 @@
 # 잔액 알림 예약 운영
 
+> 2026년 10월 9일 실행 위치 변경: 이 저장소의 `.github/workflows/balance.yml`(`Balance Notification (Saturday)`)로 옮겼다. 매주 토 09:00 KST(`0 0 * * 6` UTC)에 이 저장소의 `LOTTO_USERNAME`, `LOTTO_PASSWORD`, `DISCORD_WEBHOOK_URL` Secrets로 실행한다. Discord 메시지는 예치금과 다음 주 평일 구매액(5,000원) 충족 여부를 표시하고, 부족하면 충전할 금액을 알린다. 중복 알림을 막기 위해 `vibe-lotto`의 `Monitor Live Balance Notification`은 비활성화했다. 아래는 변경 전 기록이다.
+
 설정일: 2026년 10월 9일, 한국시간.
 
 ## 일정과 실행 위치

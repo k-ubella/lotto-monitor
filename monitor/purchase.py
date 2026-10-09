@@ -8,6 +8,7 @@ import json
 import os
 import re
 
+from .balance import KST, footer_time as _footer_time
 from .live import BalanceReader, ReadFailure, encrypt_credentials, transport_code
 
 
@@ -18,7 +19,6 @@ READY_URL = GAME_ORIGIN + "/olotto/game/egovUserReadySocket.json"
 BUY_URL = GAME_ORIGIN + "/olotto/game/execBuy.do"
 ROUND_API = "/lt645/selectThsLt645Info.do"
 SLOTS = "ABCDE"
-KST = timezone(timedelta(hours=9))
 MODES = {"1": "수동", "2": "반자동", "3": "자동"}
 GAME_HEADERS = {"Origin": GAME_ORIGIN, "Referer": GAME_PAGE}
 XHR_HEADERS = {**GAME_HEADERS, "X-Requested-With": "XMLHttpRequest", "Accept": "application/json, text/javascript, */*; q=0.01"}
@@ -84,11 +84,6 @@ class PurchaseOutcome:
         # Numbers, balance, account and remote text stay out of (public) Actions logs.
         return json.dumps({"status": self.status, "stage": self.stage, "code": self.code,
                            "requested": self.requested, "purchased": len(self.games), **self.sources})
-
-
-def _footer_time(observed_at: str) -> str:
-    when = datetime.fromisoformat(observed_at).astimezone(KST)
-    return f"🕗 {when:%Y-%m-%d} ({'월화수목금토일'[when.weekday()]}) {when:%H:%M} KST · lotto-monitor"
 
 
 def _footer(outcome: PurchaseOutcome) -> str:

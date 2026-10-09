@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from .live import BalanceReader, ReadFailure, transport_code
-from .purchase import KST, _footer_time
+from .balance import KST, footer_time as _footer_time
 
 
 DRAW_API = "/lt645/selectPstLt645Info.do"

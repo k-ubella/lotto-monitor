@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     draw.add_argument("--save", action="store_true", help="당첨번호와 게임별 결과를 records/에 추가")
     draw.add_argument("--diagnostic", action="store_true", help="번호 없이 상태·진단 코드만 출력")
     draw.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (이미 기록된 회차는 전송 안 함)")
+    stats = commands.add_parser("stats", help="records/의 구매·당첨 기록으로 통계 생성")
+    stats.add_argument("--records", type=Path, default=Path("records"), help="기록 폴더 (기본 records)")
+    stats.add_argument("--output", type=Path, help="Markdown 출력 경로 (기본 records/STATS.md)")
     commands.add_parser("notify-test", help="실제 계정·금액 없는 고정 Discord 테스트 메시지 전송")
     args = parser.parse_args(argv)
     try:
@@ -61,16 +64,24 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check":
             from .winning import check_from_environment, format_check, save_check
             outcome = check_from_environment(args.records, args.round)
-            if args.save:
+            message = format_check(outcome)
+            if args.save and outcome.status == "ok":
+                from .stats import format_stats_summary, write_stats
                 save_check(args.records, outcome)
-            print(outcome.diagnostic() if args.diagnostic else format_check(outcome))
+                head, footer = message.rsplit("\n", 1)
+                message = f"{head}\n{format_stats_summary(write_stats(args.records))}\n{footer}"
+            print(outcome.diagnostic() if args.diagnostic else message)
             if args.notify and outcome.status != "already_recorded":
                 from .discord import send_message
-                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_check(outcome))
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), message)
                 print(json.dumps({"delivery": delivery.code}))
                 if not delivery.ok:
                     return 1
             return 1 if outcome.status == "error" else 0
+        if args.command == "stats":
+            from .stats import format_stats_summary, write_stats
+            print(format_stats_summary(write_stats(args.records, args.output)))
+            return 0
         if args.command == "live":
             from .live import read_account
             outcome = read_account()
@@ -79,7 +90,8 @@ def main(argv: list[str] | None = None) -> int:
             print(outcome.diagnostic() if args.diagnostic else format_notification(outcome.result))
             if args.notify:
                 from .discord import send_message
-                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_notification(outcome.result))
+                from .balance import format_balance_alert
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_balance_alert(outcome.result, outcome.stage, outcome.code))
                 print(json.dumps({"delivery": delivery.code}))
                 if not delivery.ok:
                     return 1

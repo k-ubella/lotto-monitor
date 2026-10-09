@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import re
+
+
+KST = timezone(timedelta(hours=9))
+WEEKLY_PURCHASE_KRW = 5000  # 월~금 1게임씩
+
+
+def footer_time(observed_at: str) -> str:
+    when = datetime.fromisoformat(observed_at.replace("Z", "+00:00")).astimezone(KST)
+    return f"🕗 {when:%Y-%m-%d} ({'월화수목금토일'[when.weekday()]}) {when:%H:%M} KST · lotto-monitor"
 
 
 def parse_balance(value: object) -> int:
@@ -65,3 +74,18 @@ def format_notification(result: BalanceResult) -> str:
         "error": "잔액 조회 실패",
     }[result.status]
     return f"[lotto-monitor / {result.source}] {label}\n관측 시각: {result.observed_at}"
+
+
+def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "") -> str:
+    """Discord markdown for the weekly balance check, with a top-up warning before the next week."""
+    if result.status == "ok":
+        lines = [f"💰 **동행복권 예치금 {result.balance_krw:,}원**"]
+        if result.balance_krw >= WEEKLY_PURCHASE_KRW:
+            lines.append(f"✅ 다음 주 평일 자동 구매({WEEKLY_PURCHASE_KRW:,}원) 가능")
+        else:
+            lines.append(f"⚠️ 다음 주 평일 자동 구매에 {WEEKLY_PURCHASE_KRW:,}원이 필요합니다. **{WEEKLY_PURCHASE_KRW - result.balance_krw:,}원 이상 충전**하세요.")
+    else:
+        title = "잔액 확인 불가" if result.status == "unavailable" else "잔액 조회 실패"
+        lines = [f"🚫 **{title}**", f"단계 `{stage}` · 진단 코드 `{code}`" if stage else f"진단 코드 `{code}`"]
+    lines.append(footer_time(result.observed_at))
+    return "\n".join(lines)

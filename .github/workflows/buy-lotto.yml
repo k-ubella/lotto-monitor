@@ -75,15 +75,16 @@ jobs:
         if: steps.rows.outcome == 'success'
         with:
           ref: main
-      - name: Commit purchase record (no balance)
+      - name: Commit purchase record and stats (no balance)
         if: steps.rows.outcome == 'success'
         run: |
           rows="$RUNNER_TEMP/purchase/rows.csv"
           mkdir -p records
           if [ -s records/purchases.csv ]; then tail -n +2 "$rows" >> records/purchases.csv; else cp "$rows" records/purchases.csv; fi
+          python3 -m monitor stats --records records
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add records/purchases.csv
+          git add records/
           git commit -m "Record lotto purchase $(TZ=Asia/Seoul date +%F) [skip ci]"
           for attempt in 1 2 3; do
             git push && exit 0
