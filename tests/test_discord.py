@@ -96,6 +96,20 @@ class DiscordTests(unittest.TestCase):
             self.assertEqual(main(["live", "--diagnostic", "--notify"]), 1)
             self.assertIn("12,000원", send.call_args.args[1])
 
+    def test_delivered_failure_notice_does_not_hide_query_failure(self):
+        outcome = LiveOutcome(BalanceResult("2026-10-09T08:00:00Z", "error", None, "dhlottery"), "balance", "invalid_json")
+        with patch("monitor.live.read_account", return_value=outcome), patch("monitor.discord.send_message", return_value=Mock(ok=True, code="message_verified")) as send, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["live", "--diagnostic", "--notify"]), 1)
+            self.assertIn("잔액 조회 실패", send.call_args.args[1])
+            self.assertNotIn("0원", send.call_args.args[1])
+
+    def test_test_delivery_cli_logs_only_code(self):
+        with patch.dict("os.environ", {"DISCORD_WEBHOOK_URL": ENDPOINT}), patch("monitor.discord.send_message", return_value=Mock(ok=True, code="message_verified")) as send, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(main(["notify-test"]), 0)
+        self.assertEqual(json.loads(output.getvalue()), {"delivery": "message_verified"})
+        self.assertNotIn(ENDPOINT, output.getvalue())
+        self.assertIn("수동 전송 테스트", send.call_args.args[1])
+
 
 if __name__ == "__main__":
     unittest.main()
