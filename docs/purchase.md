@@ -83,7 +83,7 @@ A  자동  01  02  04  27  39  44      ← 코드 블록
 | [점검 실행](https://github.com/k-ubella/lotto-monitor/actions/runs/37907485355) | `dry_run` / `purchase_ready`. 로그인·구매 서버 준비·회차 확인 성공. 회차는 구매 페이지에 없어 회차 API(`round_source: api`), 날짜는 페이지(`dates_source: page`)에서 읽음. Discord `message_verified`. |
 | [실제 1게임 구매](https://github.com/k-ubella/lotto-monitor/actions/runs/37907676008) | `ok` / `purchase_verified`, 요청 1게임·구매 1게임. Discord `message_verified`. |
 
-실제 구매는 `records/purchases.csv` 도입 전이라 기록 파일에 없고, 번호는 Discord 메시지에만 있다. 새 메시지 형식, 기록 커밋, 월~금 예약 실행은 아직 실제로 확인하지 않았다. 첫 예약 실행은 2026년 10월 12일(월) 08:55 KST 예정이다.
+실제 구매는 `records/purchases.csv` 도입 전이라 자동 기록되지 않았고, Discord 알림의 번호를 사용자가 확인해 첫 행으로 직접 추가했다. 새 메시지 형식, 기록 커밋, 월~금 예약 실행은 아직 실제로 확인하지 않았다. 첫 예약 실행은 2026년 10월 12일(월) 08:55 KST 예정이다.
 
 ## 중단
 
