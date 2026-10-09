@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.history/
+secret.key
+user_data.enc
+*.log
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+.next/
+dist/
+.DS_Store
