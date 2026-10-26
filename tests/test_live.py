@@ -146,7 +146,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(session.request.call_count, 4)
         from monitor.balance import format_balance_alert
         alert = format_balance_alert(outcome.result, outcome.stage, outcome.code, outcome.reason)
-        self.assertIn("원인: 동행복권이 '비밀번호 변경안내' 화면을 띄워", alert)
+        self.assertIn("원인: 동행복권이 '비밀번호 변경안내' 화면을 띄웠는데", alert)
         self.assertIn("다음에 변경", alert)
 
     def test_every_failure_code_has_a_reason(self):

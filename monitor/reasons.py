@@ -8,7 +8,8 @@ NETWORK = "사이트에 연결하지 못했거나 응답이 늦었습니다. 일
 REASONS = {
     "credentials_missing": "GitHub Secrets에 `LOTTO_USERNAME`/`LOTTO_PASSWORD`가 없습니다. 저장소 Settings → Secrets에 등록하세요.",
     "dependencies_missing": "실행에 필요한 패키지가 설치되지 않았습니다. 워크플로 설치 단계를 확인하세요.",
-    "password_change_notice": "동행복권이 '비밀번호 변경안내' 화면을 띄워 로그인이 끝나지 않았습니다. 사이트에 직접 로그인해 '다음에 변경'을 누르거나 비밀번호를 바꾸세요. 비밀번호를 바꿨다면 GitHub Secret `LOTTO_PASSWORD`도 함께 바꿔야 합니다.",
+    "password_change_notice": "동행복권이 '비밀번호 변경안내' 화면을 띄웠는데 '다음에 변경' 버튼을 자동으로 찾지 못했습니다. 사이트에 직접 로그인해 '다음에 변경'을 누르거나 비밀번호를 바꾸세요. 비밀번호를 바꿨다면 GitHub Secret `LOTTO_PASSWORD`도 함께 바꿔야 합니다. 실행 로그의 `notice` 항목으로 자동 처리를 고칠 수 있습니다.",
+    "password_notice_defer_failed": "'비밀번호 변경안내'에서 '다음에 변경'을 자동으로 눌렀지만 로그인이 완료되지 않았습니다. 사이트에 직접 로그인해 처리하세요. 실행 로그의 `notice` 항목으로 자동 처리를 고칠 수 있습니다.",
     "wrong_credentials": "아이디 또는 비밀번호가 맞지 않습니다. 사이트 비밀번호와 GitHub Secret `LOTTO_PASSWORD`가 같은지 확인하세요. 실패가 반복되면 계정이 잠길 수 있습니다.",
     "account_locked": "로그인 실패 누적 등으로 계정이 잠겼습니다. 사이트에서 잠금을 해제한 뒤 다시 실행하세요.",
     "dormant_account": "휴면 계정으로 전환됐습니다. 사이트에서 휴면 해제 후 다시 실행하세요.",

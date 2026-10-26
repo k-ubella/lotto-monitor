@@ -190,7 +190,7 @@ class LottoPurchaser(BalanceReader):
             sources = {**self.detail, "round_source": round_source, "dates_source": dates_source}
         except ReadFailure as failure:
             unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected",
-                                        "password_change_notice", "wrong_credentials", "account_locked", "dormant_account"}
+                                        "password_change_notice", "password_notice_defer_failed", "wrong_credentials", "account_locked", "dormant_account"}
             return failed("unavailable" if unavailable else "error", failure.code, remote_message=self.reason, sources=self.detail)
         except Exception as error:
             return failed("error", transport_code(error))

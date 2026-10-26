@@ -209,6 +209,12 @@ class BalanceReader:
         self.detail = {"login_redirects": self.redirects, "login_final": self.final_path}
         page = response.text if isinstance(getattr(response, "text", None), str) else ""
         notice = _login_notice(page)
+        if notice == "password_change_notice":
+            self._defer_password_notice(page)
+            try:
+                return self.read_balance()
+            except ReadFailure as failure:
+                raise ReadFailure("password_notice_defer_failed" if failure.code == "access_denied" else failure.code) from None
         if notice:
             raise ReadFailure(notice)
         code, message = _page_var(page, "errorCode"), _page_var(page, "errorMessage")
@@ -217,6 +223,25 @@ class BalanceReader:
             self.reason = re.sub(r"\s+", " ", message).strip()[:200] or None
             raise ReadFailure("login_rejected")
         return self.read_balance()
+
+    def _defer_password_notice(self, page: str) -> None:
+        """Press '다음에 변경' on the password-change notice, as the account owner asked."""
+        from .notice import find_defer_action, page_structure
+        self.detail["notice"] = page_structure(page)
+        action = find_defer_action(page)
+        if action is None:
+            raise ReadFailure("password_change_notice")
+        self.stage = "password_notice_defer"
+        headers = {"Referer": ORIGIN + self.final_path}
+        kwargs = {}
+        if action.kind == "ajax":
+            headers.update({"X-Requested-With": "XMLHttpRequest", "AJAX": "true", "requestMenuUri": self.final_path})
+            if action.method == "POST":
+                kwargs["json"] = {}
+        elif action.method == "POST":
+            kwargs["data"] = action.data
+        self._request(action.method, action.path, extra_headers=headers, **kwargs)
+        self.detail["notice_deferred"] = action.path.split("?")[0]
 
     def read_balance(self) -> int:
         self.stage = "balance"
@@ -229,7 +254,7 @@ class BalanceReader:
             return LiveOutcome(BalanceResult(now, "ok", amount, "dhlottery"), self.stage, "balance_verified", self.detail)
         except ReadFailure as failure:
             unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected",
-                                        "password_change_notice", "wrong_credentials", "account_locked", "dormant_account"}
+                                        "password_change_notice", "password_notice_defer_failed", "wrong_credentials", "account_locked", "dormant_account"}
             result = BalanceResult(now, "unavailable" if unavailable else "error", None, "dhlottery")
             return LiveOutcome(result, self.stage, failure.code, self.detail, self.reason)
         except Exception as error:
