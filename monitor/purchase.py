@@ -9,6 +9,7 @@ import os
 import re
 
 from .balance import KST, footer_time as _footer_time
+from .reasons import explain
 from .live import BalanceReader, ReadFailure, encrypt_credentials, transport_code
 
 
@@ -101,14 +102,14 @@ def format_purchase(outcome: PurchaseOutcome) -> str:
     elif outcome.status == "dry_run":
         lines = [f"🧪 **점검 실행 · {round_label} 구매 준비 확인**", "실제 구매는 하지 않았습니다."]
     elif outcome.status == "unconfirmed":
-        lines = [f"⚠️ **구매 결과 미확인 · {round_label}**", "구매가 처리됐을 수 있습니다. 재실행 전에 동행복권 구매 내역을 확인하세요.", f"진단 코드 `{outcome.code}`"]
+        lines = [f"⚠️ **구매 결과 미확인 · {round_label}**", "구매가 처리됐을 수 있습니다. 재실행 전에 동행복권 구매 내역을 확인하세요.", "원인: " + explain(outcome.code, outcome.stage), f"진단 코드 `{outcome.code}`"]
     elif outcome.status == "rejected":
-        lines = [f"❌ **구매 거절 · {round_label}**"]
+        lines = [f"❌ **구매 거절 · {round_label}**", "원인: " + explain(outcome.code, outcome.stage)]
         if outcome.remote_message:
             lines.append("사유: " + outcome.remote_message.replace("`", "'"))
         lines.append(f"진단 코드 `{outcome.code}`")
     else:
-        lines = ["🚫 **구매 실패** (구매 요청 전 중단)", f"단계 `{outcome.stage}` · 진단 코드 `{outcome.code}`"]
+        lines = ["🚫 **구매 실패** (구매 요청 전 중단)", "원인: " + explain(outcome.code, outcome.stage), f"단계 `{outcome.stage}` · 진단 코드 `{outcome.code}`"]
         if outcome.remote_message:
             lines.append("사이트 안내: " + outcome.remote_message.replace("`", "'"))
     lines.append(_footer(outcome))
@@ -188,7 +189,8 @@ class LottoPurchaser(BalanceReader):
                 dates_source = "computed"
             sources = {**self.detail, "round_source": round_source, "dates_source": dates_source}
         except ReadFailure as failure:
-            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected"}
+            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected",
+                                        "password_change_notice", "wrong_credentials", "account_locked", "dormant_account"}
             return failed("unavailable" if unavailable else "error", failure.code, remote_message=self.reason, sources=self.detail)
         except Exception as error:
             return failed("error", transport_code(error))

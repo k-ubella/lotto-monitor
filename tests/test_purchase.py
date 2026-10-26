@@ -91,6 +91,7 @@ class PurchaseTests(unittest.TestCase):
         outcome = buyer(session).buy("example", "example", 1)
         self.assertEqual((outcome.status, outcome.code), ("rejected", "purchase_rejected"))
         self.assertIn("구매한도 초과", format_purchase(outcome))
+        self.assertIn("원인: 사이트가 구매를 거절했습니다", format_purchase(outcome))
         self.assertNotIn("구매한도", outcome.diagnostic())
 
     def test_lost_purchase_response_is_unconfirmed_and_not_retried(self):

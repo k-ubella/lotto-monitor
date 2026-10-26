@@ -137,6 +137,29 @@ class LiveTests(unittest.TestCase):
             self.assertNotIn(private, outcome.diagnostic())
         self.assertEqual(session.request.call_count, 5)  # balance is not requested after a rejection
 
+    def test_password_change_notice_is_named_and_stops_before_balance(self):
+        replies = sequence()
+        replies[3] = response(text="<h2>비밀번호 변경안내</h2><p>회원님께서는 장기간 비밀번호를 변경하지 않고</p>")
+        session = session_responses(*replies)
+        outcome = BalanceReader(session, Mock(return_value={})).read("example", "example")
+        self.assertEqual((outcome.stage, outcome.code, outcome.result.status), ("login_submit", "password_change_notice", "unavailable"))
+        self.assertEqual(session.request.call_count, 4)
+        from monitor.balance import format_balance_alert
+        alert = format_balance_alert(outcome.result, outcome.stage, outcome.code, outcome.reason)
+        self.assertIn("원인: 동행복권이 '비밀번호 변경안내' 화면을 띄워", alert)
+        self.assertIn("다음에 변경", alert)
+
+    def test_every_failure_code_has_a_reason(self):
+        from monitor.reasons import REASONS, explain
+        import re, pathlib
+        source = "".join(path.read_text(encoding="utf-8") for path in pathlib.Path("monitor").glob("*.py"))
+        codes = set(re.findall(r'ReadFailure\("([a-z_]+)"\)', source)) | set(re.findall(r'ValueError\("([a-z_]+)"\)', source))
+        codes -= {"invalid_game", "invalid_webhook"}  # internal parse errors, mapped before reaching alerts
+        missing = sorted(c for c in codes if c not in REASONS and c != "access_denied")
+        self.assertEqual(missing, [])
+        self.assertIn("로그인 상태로 인정하지", explain("access_denied", "balance"))
+        self.assertIn("403", explain("access_denied", "login_page"))
+
     def test_empty_error_vars_on_success_page_are_not_a_rejection(self):
         replies = sequence()
         replies[3] = response(text="<script>const errorMessage = '';\nconst errorCode = '';</script>")

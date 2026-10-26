@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import json
 from pathlib import Path
 
+from .reasons import explain
 from .live import BalanceReader, ReadFailure, transport_code
 from .balance import KST, footer_time as _footer_time
 
@@ -175,7 +176,7 @@ def format_check(outcome: CheckOutcome) -> str:
     if outcome.status == "pending":
         return f"⏳ **로또6/45 {outcome.round}회 당첨번호 미발표**\n다음 예약 실행에서 다시 확인합니다.\n{footer}"
     if outcome.status != "ok":
-        return f"🚫 **로또6/45 {outcome.round}회 당첨 확인 실패**\n진단 코드 `{outcome.code}`\n{footer}"
+        return f"🚫 **로또6/45 {outcome.round}회 당첨 확인 실패**\n원인: {explain(outcome.code)}\n진단 코드 `{outcome.code}`\n{footer}"
     d = outcome.draw
     when = date.fromisoformat(d.draw_date)
     lines = [f"🎯 **로또6/45 {d.round}회 당첨 결과** · {d.draw_date} ({'월화수목금토일'[when.weekday()]})",

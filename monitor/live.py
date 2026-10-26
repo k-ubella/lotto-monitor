@@ -29,6 +29,24 @@ def _page_var(html: str, name: str) -> str:
     return match.group(2).strip() if match else ""
 
 
+# Phrases specific to pages shown instead of a completed login. Every page also carries hidden
+# generic modals ("서비스 접속이 차단 되었습니다" etc.), so only distinctive sentences are matched.
+LOGIN_NOTICES = [
+    ("password_change_notice", ("장기간 비밀번호를 변경하지", "비밀번호 변경안내")),
+    ("wrong_credentials", ("비밀번호가 일치하지", "아이디 또는 비밀번호를 확인")),
+    ("account_locked", ("계정이 잠금", "계정이 잠겼", "로그인이 제한")),
+    ("dormant_account", ("휴면 계정", "휴면회원", "휴면 상태")),
+]
+
+
+def _login_notice(html: str) -> str:
+    text = re.sub(r"<[^>]+>|\s+", " ", html)
+    for code, phrases in LOGIN_NOTICES:
+        if any(phrase in text for phrase in phrases):
+            return code
+    return ""
+
+
 class ReadFailure(Exception):
     def __init__(self, code: str):
         self.code = code
@@ -190,6 +208,9 @@ class BalanceReader:
         # Paths and the site's short error code are safe for public logs; the message is not logged.
         self.detail = {"login_redirects": self.redirects, "login_final": self.final_path}
         page = response.text if isinstance(getattr(response, "text", None), str) else ""
+        notice = _login_notice(page)
+        if notice:
+            raise ReadFailure(notice)
         code, message = _page_var(page, "errorCode"), _page_var(page, "errorMessage")
         if code or message:
             self.detail["login_error_code"] = re.sub(r"[^A-Za-z0-9_-]", "", code)[:40]
@@ -207,7 +228,8 @@ class BalanceReader:
             amount = self.login(username, password)
             return LiveOutcome(BalanceResult(now, "ok", amount, "dhlottery"), self.stage, "balance_verified", self.detail)
         except ReadFailure as failure:
-            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected"}
+            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected",
+                                        "password_change_notice", "wrong_credentials", "account_locked", "dormant_account"}
             result = BalanceResult(now, "unavailable" if unavailable else "error", None, "dhlottery")
             return LiveOutcome(result, self.stage, failure.code, self.detail, self.reason)
         except Exception as error:

@@ -86,7 +86,8 @@ def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "",
             lines.append(f"⚠️ 다음 주 평일 자동 구매에 {WEEKLY_PURCHASE_KRW:,}원이 필요합니다. **{WEEKLY_PURCHASE_KRW - result.balance_krw:,}원 이상 충전**하세요.")
     else:
         title = "잔액 확인 불가" if result.status == "unavailable" else "잔액 조회 실패"
-        lines = [f"🚫 **{title}**", f"단계 `{stage}` · 진단 코드 `{code}`" if stage else f"진단 코드 `{code}`"]
+        from .reasons import explain
+        lines = [f"🚫 **{title}**", "원인: " + explain(code, stage), f"단계 `{stage}` · 진단 코드 `{code}`" if stage else f"진단 코드 `{code}`"]
         if reason:
             lines.append("사이트 안내: " + reason.replace("`", "'"))
     lines.append(footer_time(result.observed_at))
