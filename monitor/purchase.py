@@ -186,7 +186,7 @@ class LottoPurchaser(BalanceReader):
             if not draw_date or not limit_date:
                 draw_date, limit_date = next_draw_dates(now)
                 dates_source = "computed"
-            sources = {"round_source": round_source, "dates_source": dates_source}
+            sources = {**self.detail, "round_source": round_source, "dates_source": dates_source}
         except ReadFailure as failure:
             unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected"}
             return failed("unavailable" if unavailable else "error", failure.code, remote_message=self.reason, sources=self.detail)

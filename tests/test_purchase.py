@@ -117,7 +117,7 @@ class PurchaseTests(unittest.TestCase):
         replies = sequence() + [response({"ready_ip": "x"}), response(text="<html></html>"), response({"data": {"result": {"ltEpsd": 1246}}})]
         outcome = buyer(Mock(request=Mock(side_effect=replies), cookies=[])).buy("example", "example", 1, dry_run=True)
         self.assertEqual(outcome.round, 1246)
-        self.assertEqual(json.loads(outcome.diagnostic()), {"status": "dry_run", "stage": "game_page", "code": "purchase_ready", "requested": 1, "purchased": 0, "round_source": "api", "dates_source": "computed"})
+        self.assertEqual(json.loads(outcome.diagnostic()), {"status": "dry_run", "stage": "game_page", "code": "purchase_ready", "requested": 1, "purchased": 0, "login_redirects": [], "login_final": "/login/securityLoginCheck.do", "round_source": "api", "dates_source": "computed"})
 
     def test_login_cookie_is_shared_with_game_server(self):
         cookies = [SimpleNamespace(name="JSESSIONID", value="v", domain="www.dhlottery.co.kr"),
