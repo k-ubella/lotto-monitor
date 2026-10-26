@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
+import re
 from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
@@ -15,6 +16,17 @@ from .balance import BalanceResult, parse_balance
 ORIGIN = "https://www.dhlottery.co.kr"
 BALANCE_PATH = "/mypage/selectUserMndp.do"
 ALLOWED_HOSTS = {"www.dhlottery.co.kr", "ol.dhlottery.co.kr"}
+
+
+def _path(url: str) -> str:
+    # Path only: drops query values and ";jsessionid=" so no session or account data is logged.
+    return urlsplit(url).path.split(";")[0][:80]
+
+
+def _page_var(html: str, name: str) -> str:
+    """Values the login page injects as `const errorCode = '...'` after a rejected login."""
+    match = re.search(r"\b(?:const|let|var)\s+" + name + r"""\s*=\s*(['"])(.*?)\1""", html)
+    return match.group(2).strip() if match else ""
 
 
 class ReadFailure(Exception):
@@ -76,10 +88,12 @@ class LiveOutcome:
     result: BalanceResult
     stage: str
     code: str
+    detail: dict = field(default_factory=dict)
+    reason: str | None = None  # Site's login error message: Discord only, never logs.
 
     def diagnostic(self) -> str:
         # Neither amount, username, cookies nor remote error content is serialized.
-        return json.dumps({"status": self.result.status, "stage": self.stage, "code": self.code})
+        return json.dumps({"status": self.result.status, "stage": self.stage, "code": self.code, **self.detail})
 
 
 class BalanceReader:
@@ -87,6 +101,9 @@ class BalanceReader:
         self.session = session
         self.encrypt = encrypt
         self.stage = "start"
+        self.detail: dict = {}
+        self.reason: str | None = None
+        self.final_path = ""
 
     def _request(self, method: str, path: str, *, allow_unauthenticated: bool = False, extra_headers: dict | None = None, **kwargs):
         url = urljoin(ORIGIN, path)
@@ -106,6 +123,7 @@ class BalanceReader:
         if path == "/login/selectRsaModulus.do":
             headers.update({"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"})
         headers.update(extra_headers or {})
+        self.redirects = []
         for _ in range(4):
             parsed = urlsplit(url)
             if parsed.scheme != "https" or parsed.netloc not in ALLOWED_HOSTS:
@@ -118,6 +136,7 @@ class BalanceReader:
                 if not target:
                     raise ReadFailure("invalid_redirect")
                 url = urljoin(url, target)
+                self.redirects.append(_path(url))
                 # Never replay credentials to a redirected URL, even on the same origin.
                 if method == "POST":
                     if response.status_code in (307, 308):
@@ -132,6 +151,7 @@ class BalanceReader:
                 raise ReadFailure("rate_limited")
             if response.status_code != 200:
                 raise ReadFailure("http_error")
+            self.final_path = _path(url)
             return response
         raise ReadFailure("redirect_limit")
 
@@ -166,7 +186,15 @@ class BalanceReader:
             raise ReadFailure("rsa_key_missing")
         data = self.encrypt(username, password, key["rsaModulus"], key["publicExponent"])
         self.stage = "login_submit"
-        self._request("POST", "/login/securityLoginCheck.do", data=data)
+        response = self._request("POST", "/login/securityLoginCheck.do", data=data)
+        # Paths and the site's short error code are safe for public logs; the message is not logged.
+        self.detail = {"login_redirects": self.redirects, "login_final": self.final_path}
+        page = response.text if isinstance(getattr(response, "text", None), str) else ""
+        code, message = _page_var(page, "errorCode"), _page_var(page, "errorMessage")
+        if code or message:
+            self.detail["login_error_code"] = re.sub(r"[^A-Za-z0-9_-]", "", code)[:40]
+            self.reason = re.sub(r"\s+", " ", message).strip()[:200] or None
+            raise ReadFailure("login_rejected")
         return self.read_balance()
 
     def read_balance(self) -> int:
@@ -177,11 +205,11 @@ class BalanceReader:
         now = datetime.now(timezone.utc).isoformat()
         try:
             amount = self.login(username, password)
-            return LiveOutcome(BalanceResult(now, "ok", amount, "dhlottery"), self.stage, "balance_verified")
+            return LiveOutcome(BalanceResult(now, "ok", amount, "dhlottery"), self.stage, "balance_verified", self.detail)
         except ReadFailure as failure:
-            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing"}
+            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected"}
             result = BalanceResult(now, "unavailable" if unavailable else "error", None, "dhlottery")
-            return LiveOutcome(result, self.stage, failure.code)
+            return LiveOutcome(result, self.stage, failure.code, self.detail, self.reason)
         except Exception as error:
             return LiveOutcome(BalanceResult(now, "error", None, "dhlottery"), self.stage, transport_code(error))
 

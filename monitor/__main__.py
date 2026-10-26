@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.notify:
                 from .discord import send_message
                 from .balance import format_balance_alert
-                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_balance_alert(outcome.result, outcome.stage, outcome.code))
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_balance_alert(outcome.result, outcome.stage, outcome.code, outcome.reason))
                 print(json.dumps({"delivery": delivery.code}))
                 if not delivery.ok:
                     return 1

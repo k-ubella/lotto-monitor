@@ -109,6 +109,8 @@ def format_purchase(outcome: PurchaseOutcome) -> str:
         lines.append(f"진단 코드 `{outcome.code}`")
     else:
         lines = ["🚫 **구매 실패** (구매 요청 전 중단)", f"단계 `{outcome.stage}` · 진단 코드 `{outcome.code}`"]
+        if outcome.remote_message:
+            lines.append("사이트 안내: " + outcome.remote_message.replace("`", "'"))
     lines.append(_footer(outcome))
     return "\n".join(lines)
 
@@ -186,8 +188,8 @@ class LottoPurchaser(BalanceReader):
                 dates_source = "computed"
             sources = {"round_source": round_source, "dates_source": dates_source}
         except ReadFailure as failure:
-            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing"}
-            return failed("unavailable" if unavailable else "error", failure.code)
+            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected"}
+            return failed("unavailable" if unavailable else "error", failure.code, remote_message=self.reason, sources=self.detail)
         except Exception as error:
             return failed("error", transport_code(error))
         if dry_run:

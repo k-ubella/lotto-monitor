@@ -122,6 +122,28 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(outcome.code, "credential_redirect")
         self.assertEqual(session.request.call_count, 4)
 
+    def test_rejected_login_reports_site_code_and_path_but_logs_no_message(self):
+        replies = sequence()
+        replies[3] = response(status=302, headers={"Location": "/login;jsessionid=SECRET?userId=example&x=1"})
+        replies.insert(4, response(text="<script>const errorMessage = '비밀번호를 변경해 주세요';\nconst inpUserId = 'example';\nconst errorCode = 'PW90';</script>"))
+        session = session_responses(*replies)
+        outcome = BalanceReader(session, Mock(return_value={})).read("example", "example")
+        self.assertEqual((outcome.stage, outcome.code, outcome.result.status), ("login_submit", "login_rejected", "unavailable"))
+        self.assertEqual(outcome.reason, "비밀번호를 변경해 주세요")
+        diagnostic = json.loads(outcome.diagnostic())
+        self.assertEqual(diagnostic["login_error_code"], "PW90")
+        self.assertEqual(diagnostic["login_redirects"], ["/login"])
+        for private in ["비밀번호", "SECRET", "example"]:
+            self.assertNotIn(private, outcome.diagnostic())
+        self.assertEqual(session.request.call_count, 5)  # balance is not requested after a rejection
+
+    def test_empty_error_vars_on_success_page_are_not_a_rejection(self):
+        replies = sequence()
+        replies[3] = response(text="<script>const errorMessage = '';\nconst errorCode = '';</script>")
+        outcome = BalanceReader(session_responses(*replies), Mock(return_value={})).read("example", "example")
+        self.assertEqual(outcome.code, "balance_verified")
+        self.assertEqual(json.loads(outcome.diagnostic())["login_final"], "/login/securityLoginCheck.do")
+
     def test_diagnostic_has_no_balance_credentials_or_remote_error(self):
         session = session_responses(RuntimeError("private-response-and-password"))
         outcome = BalanceReader(session).read("example", "example")

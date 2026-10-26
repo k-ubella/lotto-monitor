@@ -76,7 +76,7 @@ def format_notification(result: BalanceResult) -> str:
     return f"[lotto-monitor / {result.source}] {label}\n관측 시각: {result.observed_at}"
 
 
-def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "") -> str:
+def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "", reason: str | None = None) -> str:
     """Discord markdown for the weekly balance check, with a top-up warning before the next week."""
     if result.status == "ok":
         lines = [f"💰 **동행복권 예치금 {result.balance_krw:,}원**"]
@@ -87,5 +87,7 @@ def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "")
     else:
         title = "잔액 확인 불가" if result.status == "unavailable" else "잔액 조회 실패"
         lines = [f"🚫 **{title}**", f"단계 `{stage}` · 진단 코드 `{code}`" if stage else f"진단 코드 `{code}`"]
+        if reason:
+            lines.append("사이트 안내: " + reason.replace("`", "'"))
     lines.append(footer_time(result.observed_at))
     return "\n".join(lines)
