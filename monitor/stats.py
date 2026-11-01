@@ -54,7 +54,9 @@ def build_stats(records: Path) -> dict:
     spent = len(tickets) * GAME_PRICE
     checked_spent = sum(e["games"] for e in by_round.values() if e["checked"]) * GAME_PRICE
     prize = sum(int(w["prize"] or 0) for w in wins)
-    mine = Counter(n for t in tickets for n in _numbers(t["numbers"]))
+    # Past games whose numbers the site still shows (records/history_numbers.csv), before automatic buying.
+    past = _rows(records / "history_numbers.csv")
+    mine = Counter(n for t in tickets + past for n in _numbers(t["numbers"]))
     drawn = Counter(n for d in draws.values() for n in _numbers(d["numbers"]))
     return {
         "games": len(tickets),
@@ -69,7 +71,8 @@ def build_stats(records: Path) -> dict:
         "return_rate": prize / checked_spent * 100 if checked_spent else 0.0,
         "ranks": Counter(int(w["rank"]) for w in wins if _won(w)),
         "matched": Counter(int(w["matched"]) for w in wins),
-        "modes": Counter(t["mode"] for t in tickets),
+        "modes": Counter(t["mode"] for t in tickets + past),
+        "past_games": len(past),
         "rounds": dict(sorted(by_round.items(), key=lambda item: int(item[0]), reverse=True)),
         "months": dict(sorted(months.items(), reverse=True)),
         "my_numbers": mine,
@@ -106,7 +109,11 @@ def build_history(records: Path) -> dict | None:
     dates = sorted(r["purchased_on"] for r in rows)
     lotto_dates = sorted(r["purchased_on"] for r in rows if r["lottery"] == "로또6/45") or dates
     lotto = kinds.get("로또6/45", {"tickets": 0, "spent": 0, "prize": 0, "won": 0})
-    return {"first": dates[0], "last": dates[-1], "lotto_first": lotto_dates[0], "kinds": dict(sorted(kinds.items(), key=lambda kv: -kv[1]["tickets"])),
+    numbered = _rows(records / "history_numbers.csv")
+    numbered_dates = sorted(r["purchased_on"] for r in numbered)
+    return {"numbered": {"games": len(numbered), "first": numbered_dates[0] if numbered else "", "last": numbered_dates[-1] if numbered else "",
+                         "ranks": Counter(f"{r['rank']}등" for r in numbered if r["rank"]), "prize": sum(int(r["prize"] or 0) for r in numbered)},
+            "first": dates[0], "last": dates[-1], "lotto_first": lotto_dates[0], "kinds": dict(sorted(kinds.items(), key=lambda kv: -kv[1]["tickets"])),
             "years": dict(sorted(years.items())), "lotto": lotto, "lotto_ranks": ranks}
 
 
@@ -145,6 +152,13 @@ def format_history_markdown(history: dict, stats: dict) -> list[str]:
         lines.append(f"| {year} | {y['games']:,} | {y['games'] * GAME_PRICE:,}원 | {y['won']} | {y['prize']:,}원 | {y['prize'] - y['games'] * GAME_PRICE:+,}원 |")
     lines += ["", "로또6/45 당첨: " + (", ".join(f"{k} {v}회" for k, v in sorted(h["lotto_ranks"].items())) or "없음"),
               "", "구매내역의 당첨 건수는 구매 건(최대 5게임) 단위이며, 당첨금은 세금 공제 전이다. 표 번호와 주문번호는 공개하지 않는다.", ""]
+    n = h["numbered"]
+    if n["games"]:
+        lines += ["### 과거 번호 (records/history_numbers.csv)", "",
+                  f"동행복권 티켓 조회로 번호를 확인한 {n['games']:,}게임({n['first']} ~ {n['last']})이다. "
+                  f"과거 로또 {lotto['tickets']:,}게임 중 나머지는 사이트가 오래된 티켓 조회를 막아('유효하지 않은 티켓') 번호가 없다.", "",
+                  f"- 당첨: " + (", ".join(f"{k} {v}게임" for k, v in sorted(n["ranks"].items())) or "없음") + f" · {n['prize']:,}원", ""]
+    return lines
     return lines
 
 
@@ -201,7 +215,7 @@ def format_stats_markdown(stats: dict) -> str:
         "",
         "## 번호",
         "",
-        f"- 내가 많이 받은 번호: {_top(s['my_numbers'])}",
+        f"- 내가 많이 받은 번호 (자동구매 {s['games']:,}게임 + 과거 {s['past_games']:,}게임): {_top(s['my_numbers'])}",
         f"- 한 번도 받지 않은 번호 ({len(s['never_picked'])}개): " + (" ".join(f"{n:02d}" for n in s["never_picked"]) or "-"),
         f"- 확인한 {s['draws']}개 회차의 당첨번호 빈도: {_top(s['drawn_numbers'])}",
         f"- 구매 방식: " + (", ".join(f"{m} {c}" for m, c in s["modes"].most_common()) or "-"),

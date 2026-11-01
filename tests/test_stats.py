@@ -86,6 +86,22 @@ class HistoryTests(unittest.TestCase):
             self.assertIn("| 구매 | 15게임 · 15,000원 |", text)
             self.assertIn("| 캐치미 | 1 | 1 | 가격 정보 없음 | 1 | 2,000원 | - |", text)
             self.assertIn("| 2024 | 8 | 8,000원 | 1 | 50,000원 | +42,000원 |", text)
+            self.assertNotIn("과거 번호", text)
+
+    def test_past_numbers_feed_number_stats(self):
+        with tempfile.TemporaryDirectory() as folder:
+            records = Path(folder)
+            (records / "history.csv").write_text(self.HISTORY, encoding="utf-8")
+            (records / "history_numbers.csv").write_text(
+                "purchased_on,round,slot,mode,numbers,rank,prize\n"
+                "2024-10-05,1140,A,자동,03 06 14 19 37 40,,0\n"
+                "2024-10-05,1140,B,수동,07 08 10 22 37 38,4,50000\n", encoding="utf-8")
+            s = build_stats(records)
+            self.assertEqual((s["past_games"], s["my_numbers"][37], s["modes"]["수동"]), (2, 2, 1))
+            text = format_stats_markdown(s)
+            self.assertIn("번호를 확인한 2게임(2024-10-05 ~ 2024-10-05)", text)
+            self.assertIn("- 당첨: 4등 1게임 · 50,000원", text)
+            self.assertIn("(자동구매 0게임 + 과거 2게임): 37(2)", text)
 
     def test_no_history_file_keeps_page_unchanged(self):
         with tempfile.TemporaryDirectory() as folder:
