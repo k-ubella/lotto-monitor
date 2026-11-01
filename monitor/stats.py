@@ -7,6 +7,9 @@ import csv
 from pathlib import Path
 
 GAME_PRICE = 1000
+# Ticket prices for the exported history; other e-lotteries have no price in the export.
+PRICES = {"로또6/45": 1000, "연금복권720+": 1000, "연금복권520": 1000}
+LOTTO_RANKS = {5000: "5등", 50000: "4등"}
 
 
 def _rows(path: Path) -> list[dict]:
@@ -73,7 +76,76 @@ def build_stats(records: Path) -> dict:
         "never_picked": [n for n in range(1, 46) if not mine[n]],
         "drawn_numbers": drawn,
         "draws": len(draws),
+        "history": build_history(records),
     }
+
+
+def build_history(records: Path) -> dict | None:
+    """Past purchases exported from dhlottery (records/history.csv): no ticket or order numbers."""
+    rows = _rows(records / "history.csv")
+    if not rows:
+        return None
+    kinds = defaultdict(lambda: {"purchases": 0, "tickets": 0, "spent": 0, "won": 0, "prize": 0})
+    years = defaultdict(lambda: {"games": 0, "prize": 0, "won": 0})
+    ranks = Counter()
+    for r in rows:
+        tickets, prize = int(r["tickets"]), int(r["prize"] or 0)
+        k = kinds[r["lottery"]]
+        k["purchases"] += 1
+        k["tickets"] += tickets
+        k["spent"] = None if k["spent"] is None or r["lottery"] not in PRICES else k["spent"] + tickets * PRICES[r["lottery"]]
+        k["won"] += r["result"] == "당첨"
+        k["prize"] += prize
+        if r["lottery"] == "로또6/45":
+            y = years[r["purchased_on"][:4]]
+            y["games"] += tickets
+            y["prize"] += prize
+            y["won"] += r["result"] == "당첨"
+            if prize:
+                ranks[LOTTO_RANKS.get(prize, f"{prize:,}원")] += 1
+    dates = sorted(r["purchased_on"] for r in rows)
+    lotto_dates = sorted(r["purchased_on"] for r in rows if r["lottery"] == "로또6/45") or dates
+    lotto = kinds.get("로또6/45", {"tickets": 0, "spent": 0, "prize": 0, "won": 0})
+    return {"first": dates[0], "last": dates[-1], "lotto_first": lotto_dates[0], "kinds": dict(sorted(kinds.items(), key=lambda kv: -kv[1]["tickets"])),
+            "years": dict(sorted(years.items())), "lotto": lotto, "lotto_ranks": ranks}
+
+
+def _rate(prize: int, spent: int) -> str:
+    return f"{prize / spent * 100:.1f}%" if spent else "-"
+
+
+def format_history_markdown(history: dict, stats: dict) -> list[str]:
+    h, lotto = history, history["lotto"]
+    games, spent = lotto["tickets"] + stats["checked_games"], lotto["spent"] + stats["checked_spent"]
+    prize = lotto["prize"] + stats["prize"]
+    lines = [
+        "## 전체 기간 로또6/45 (과거 이력 + 자동구매)",
+        "",
+        "| 항목 | 값 |",
+        "| --- | --- |",
+        f"| 기간 | {h['lotto_first']} ~ 현재 |",
+        f"| 구매 | {games:,}게임 · {spent:,}원 |",
+        f"| 당첨금 | {prize:,}원 |",
+        f"| 손익 | {prize - spent:+,}원 |",
+        f"| 회수율 | {_rate(prize, spent)} |",
+        "",
+        f"과거 이력은 동행복권 구매내역 내보내기({h['first']} ~ {h['last']}), 이후는 자동구매 기록이다. "
+        "두 기록 사이에 다른 방법으로 산 표는 포함되지 않는다. 추첨 전 게임은 제외했다.",
+        "",
+        "## 과거 이력 (동행복권 구매내역)",
+        "",
+        "| 복권 | 구매 건수 | 매수 | 구매액 | 당첨 건수 | 당첨금 | 회수율 |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for name, k in h["kinds"].items():
+        spent_text = f"{k['spent']:,}원" if k["spent"] is not None else "가격 정보 없음"
+        lines.append(f"| {name} | {k['purchases']} | {k['tickets']} | {spent_text} | {k['won']} | {k['prize']:,}원 | {_rate(k['prize'], k['spent'] or 0)} |")
+    lines += ["", "### 로또6/45 연도별", "", "| 연도 | 게임 | 구매액 | 당첨 건수 | 당첨금 | 손익 |", "| --- | --- | --- | --- | --- | --- |"]
+    for year, y in h["years"].items():
+        lines.append(f"| {year} | {y['games']:,} | {y['games'] * GAME_PRICE:,}원 | {y['won']} | {y['prize']:,}원 | {y['prize'] - y['games'] * GAME_PRICE:+,}원 |")
+    lines += ["", "로또6/45 당첨: " + (", ".join(f"{k} {v}회" for k, v in sorted(h["lotto_ranks"].items())) or "없음"),
+              "", "구매내역의 당첨 건수는 구매 건(최대 5게임) 단위이며, 당첨금은 세금 공제 전이다. 표 번호와 주문번호는 공개하지 않는다.", ""]
+    return lines
 
 
 def _top(counter: Counter, count: int = 10) -> str:
@@ -137,6 +209,9 @@ def format_stats_markdown(stats: dict) -> str:
         "자동번호는 무작위이므로 번호 빈도는 기록용이며 당첨 확률과 관계없다.",
         "",
     ]
+    if stats.get("history"):
+        index = lines.index("## 등수별 당첨")
+        lines[index:index] = format_history_markdown(stats["history"], stats)
     return "\n".join(lines)
 
 

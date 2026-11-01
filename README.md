@@ -86,7 +86,7 @@ python3 -m monitor check --round 1246
 python3 -m monitor stats
 ```
 
-구매·당첨 기록으로 [`records/STATS.md`](records/STATS.md)를 만듭니다. 구매액·당첨금·손익·회수율, 등수와 일치 개수 분포, 회차별·월별 표, 번호 빈도를 담으며 기록이 커밋될 때마다 자동으로 갱신됩니다. 잔액은 포함하지 않습니다. 자세한 내용은 [통계](docs/stats.md)를 확인하세요.
+구매·당첨 기록과 동행복권에서 내보낸 과거 구매내역(`records/history.csv`, 2015~2026-09)으로 [`records/STATS.md`](records/STATS.md)를 만듭니다. 구매액·당첨금·손익·회수율, 등수와 일치 개수 분포, 회차별·월별 표, 번호 빈도를 담으며 기록이 커밋될 때마다 자동으로 갱신됩니다. 잔액은 포함하지 않습니다. 자세한 내용은 [통계](docs/stats.md)를 확인하세요.
 
 ## 문서
 

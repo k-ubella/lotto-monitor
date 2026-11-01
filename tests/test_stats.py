@@ -59,6 +59,39 @@ class StatsTests(unittest.TestCase):
         self.assertTrue((self.records / "STATS.md").exists())
 
 
+class HistoryTests(unittest.TestCase):
+    HISTORY = """purchased_on,lottery,round,tickets,result,prize,draw_date
+2015-04-03,연금복권520,197,1,낙첨,0,2015-04-08
+2019-02-09,로또6/45,845,5,당첨,5000,2019-02-09
+2024-10-05,로또6/45,1140,5,당첨,50000,2024-10-05
+2024-10-12,로또6/45,1141,3,낙첨,0,2024-10-12
+2020-01-01,캐치미,1,1,당첨,2000,2020-01-01
+"""
+
+    def test_history_totals_and_lifetime_lotto(self):
+        with tempfile.TemporaryDirectory() as folder:
+            records = Path(folder)
+            (records / "history.csv").write_text(self.HISTORY, encoding="utf-8")
+            (records / "purchases.csv").write_text(PURCHASES, encoding="utf-8")
+            (records / "draws.csv").write_text(DRAWS, encoding="utf-8")
+            (records / "winnings.csv").write_text(WINNINGS, encoding="utf-8")
+            s = build_stats(records)
+            h = s["history"]
+            self.assertEqual((h["lotto"]["tickets"], h["lotto"]["spent"], h["lotto"]["prize"]), (13, 13000, 55000))
+            self.assertEqual(h["lotto_ranks"], {"5등": 1, "4등": 1})
+            self.assertIsNone(h["kinds"]["캐치미"]["spent"])
+            text = format_stats_markdown(s)
+            self.assertIn("| 기간 | 2019-02-09 ~ 현재 |", text)
+            # 13 past games + 2 checked automatic games; prize 55,000 + 50,000,000
+            self.assertIn("| 구매 | 15게임 · 15,000원 |", text)
+            self.assertIn("| 캐치미 | 1 | 1 | 가격 정보 없음 | 1 | 2,000원 | - |", text)
+            self.assertIn("| 2024 | 8 | 8,000원 | 1 | 50,000원 | +42,000원 |", text)
+
+    def test_no_history_file_keeps_page_unchanged(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertNotIn("과거 이력", format_stats_markdown(build_stats(Path(folder))))
+
+
 class BalanceAlertTests(unittest.TestCase):
     def test_enough_balance_and_top_up_warning(self):
         ok = format_balance_alert(BalanceResult("2026-10-10T00:00:00+00:00", "ok", 12000, "dhlottery"))
