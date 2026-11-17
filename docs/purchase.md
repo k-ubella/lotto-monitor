@@ -18,7 +18,7 @@
 - 파일: `.github/workflows/buy-lotto.yml`, `Buy Lotto (weekdays)`.
 - 예약: `cron: '55 23 * * 0-4'` (UTC) = 월~금 08:55 KST. GitHub 혼잡 시 몇 시간 지연될 수 있다.
 - 수동 실행: Actions → `Buy Lotto (weekdays)` → `Run workflow`. 게임 수 1~5를 고를 수 있고, `dry_run`이 기본으로 켜져 있어 실제 구매 없이 로그인·회차 확인만 한다. 실제 수동 구매는 `dry_run`을 끈다.
-- 동시 실행은 `concurrency`로 직렬화한다. 구매 요청은 실행당 1회이며 재시도하지 않는다.
+- 동시 실행은 `concurrency`로 직렬화한다. 구매 요청은 시도당 1회이며, 구매 요청 전 단계의 일시적 실패만 60초 간격으로 최대 2회 더 시도한다.
 
 ## 필요한 Secrets
 
@@ -45,6 +45,19 @@ Secrets가 없으면 네트워크 접속 없이 `credentials_missing`으로 실�
 공개 저장소의 Actions 로그는 누구나 볼 수 있으므로 `--diagnostic` 출력(상태·단계·진단 코드·게임 수·회차/날짜 출처)만 남긴다. 번호·잔액·사이트 메시지는 Discord에만 보낸다.
 
 `dates_source`가 `computed`이면 구매 페이지에서 추첨일·지급기한을 찾지 못해 다가오는 토요일과 그 366일 뒤로 계산했다는 뜻이다(기존 `vibe-lotto`와 같은 대체값).
+
+## 재시도
+
+같은 실행 안에서 최대 3회(최초 1회 + 재시도 2회) 시도한다. 워크플로의 구매 job은 `timeout-minutes: 5`이므로, 재시도에 쓸 수 있는 시간은 200초로 제한하고(`RETRY_BUDGET_SECONDS`) 남은 시간이 다음 시도에 모자라면 더 시도하지 않고 그 결과로 끝낸다. 정상적인 시도는 5~10초면 끝나므로 3회를 모두 써도 약 2분 30초 안에 정리된다 — 5분 안에 충분한 여유가 있다.
+
+| 구분 | 재시도 |
+| --- | --- |
+| 구매 요청 전 실패 — `connect_timeout`·`read_timeout`·`connection_error`·`tls_error`·`http_error`·`rate_limited`·`access_denied`(잔액 단계)·`ready_ip_missing`·`round_missing`·응답 형식 오류 등 | 60초 후 다시 시도 |
+| 구매 요청 전 실패라도 다시 해도 결과가 같은 것 — `wrong_credentials`·`account_locked`·`dormant_account`·`login_rejected`·`password_change_notice`·`authentication_unverified`·`credentials_missing`·`dependencies_missing`·`invalid_game_count` | 재시도하지 않음. 비밀번호를 반복 입력하면 계정이 잠길 수 있다 |
+| `ok`·`dry_run` | 재시도할 필요 없음 |
+| `unconfirmed`·`rejected` — 구매 요청이 실제로 나간 뒤 | **절대 재시도하지 않음**. 응답을 잃었어도 티켓이 이미 구매됐을 수 있다 |
+
+시도마다 새 세션으로 처음부터 진행하고, 구매 기록과 Discord 알림은 **마지막 결과 하나**로만 남긴다. 중간 실패는 `--diagnostic` 로그에 `{"retry": 1, "status": ..., "stage": ..., "code": ..., "retry_in_seconds": 60}` 한 줄로만 남기고 알림은 보내지 않는다. 따라서 재시도 끝에 성공하면 구매 완료 알림 1건, 모두 실패하면 실패 알림 1건을 받는다.
 
 ## Discord 메시지
 
@@ -74,7 +87,7 @@ A  자동  01  02  04  27  39  44      ← 코드 블록
 
 ## 검증 상태
 
-모의 응답으로 구매 요청 형식, 요청 1회 보장, 점검 실행, 거절·응답 유실 처리, 로그·기록 비노출을 테스트했다.
+모의 응답으로 구매 요청 형식, 요청 1회 보장, 점검 실행, 거절·응답 유실 처리, 로그·기록 비노출, 구매 전 실패 재시도(성공·최종 실패·중단 조건·시간 예산)를 테스트했다.
 
 2026년 10월 9일 이 저장소의 Secrets로 실제 실행을 확인했다.
 

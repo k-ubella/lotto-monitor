@@ -39,7 +39,7 @@ monitor/records.py           # 로컬 SQLite 저장 및 읽기 전용 조회
 monitor/__main__.py          # 오프라인 CLI
 monitor/live.py              # 명시적으로 실행하는 로그인·잔액 조회
 monitor/discord.py           # 명시적 전송과 메시지 재조회 검증
-monitor/purchase.py          # 로또6/45 자동번호 구매 (요청 1회, 재시도 없음)
+monitor/purchase.py          # 로또6/45 자동번호 구매 (시도당 요청 1회, 구매 전 실패만 재시도)
 monitor/winning.py           # 공개 당첨번호와 구매 기록 대조
 monitor/stats.py             # 구매·당첨 통계 (records/STATS.md)
 requirements-live.txt        # 조회 어댑터의 선택적 의존성

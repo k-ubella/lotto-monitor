@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     live.add_argument("--diagnostic", action="store_true", help="금액 없이 단계·진단 코드만 출력")
     live.add_argument("--db", type=Path, help="지정하면 조회 결과를 로컬 DB에 기록")
     live.add_argument("--notify", action="store_true", help="조회 결과를 Discord로 전송 (성공 시 실제 잔액 포함)")
-    buy = commands.add_parser("buy", help="로또6/45 자동번호 구매 (실행당 구매 요청 1회, 재시도 없음)")
+    buy = commands.add_parser("buy", help="로또6/45 자동번호 구매 (시도당 구매 요청 1회, 구매 전 실패만 재시도)")
     buy.add_argument("--games", type=int, default=1, choices=range(1, 6), help="구매할 게임 수 1~5 (기본 1)")
     buy.add_argument("--dry-run", action="store_true", help="로그인·회차 확인까지만 하고 구매 요청은 보내지 않음")
     buy.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드만 출력")
@@ -49,8 +49,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"delivery": delivery.code}))
             return 0 if delivery.ok else 1
         if args.command == "buy":
-            from .purchase import append_records, buy_from_environment, format_purchase
-            outcome = buy_from_environment(args.games, args.dry_run)
+            from .purchase import append_records, buy_with_retry, format_purchase
+
+            def report_retry(failed_attempt, failed, wait):
+                # 공개 Actions 로그: 중간 실패는 진단 값만 남기고, 알림은 마지막 결과에만 보낸다.
+                if args.diagnostic:
+                    print(json.dumps({"retry": failed_attempt, "status": failed.status,
+                                      "stage": failed.stage, "code": failed.code,
+                                      "retry_in_seconds": int(wait)}))
+                else:
+                    print(f"{failed_attempt}번째 시도 실패(구매 요청 전 · {failed.code}) — {int(wait)}초 후 재시도")
+
+            outcome = buy_with_retry(args.games, args.dry_run, on_retry=report_retry)
             if args.record is not None:
                 append_records(args.record, outcome)
             print(outcome.diagnostic() if args.diagnostic else format_purchase(outcome))

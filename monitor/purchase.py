@@ -1,4 +1,5 @@
-"""Opt-in Lotto 6/45 automatic purchase. One purchase request per run, never retried."""
+"""Opt-in Lotto 6/45 automatic purchase. One purchase request per try; only failures before
+that request are retried, so a lost response can never buy twice."""
 
 from __future__ import annotations
 
@@ -7,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
+import time
 
 from .balance import KST, footer_time as _footer_time
 from .reasons import explain
@@ -209,7 +211,7 @@ class LottoPurchaser(BalanceReader):
             "saleMdaDcd": "10",
         }
         try:
-            # Never retried: a lost response may still mean the ticket was bought.
+            # Never retried (here or by buy_with_retry): a lost response may still mean the ticket was bought.
             response = self._request("POST", BUY_URL, data=data, extra_headers={**XHR_HEADERS, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
             if getattr(response, "encoding", None) == "ISO-8859-1":
                 response.encoding = "euc-kr"
@@ -251,3 +253,69 @@ def buy_from_environment(games: int, dry_run: bool = False) -> PurchaseOutcome:
         return PurchaseOutcome(observed, "error", "dependencies", "dependencies_missing", games)
     with requests.Session() as session:
         return LottoPurchaser(session, encrypt_credentials).buy(username, password, games, dry_run)
+
+
+DEFAULT_ATTEMPTS = 3  # 최초 1회 + 재시도 2회
+DEFAULT_RETRY_DELAY = 60.0
+# 워크플로 timeout-minutes: 5 안에서 설치·기록 단계까지 여유를 남기도록 재시도에 쓰는 시간을 제한한다.
+RETRY_BUDGET_SECONDS = 200.0
+
+# 다시 시도해도 결과가 같은 실패, 또는 반복 입력하면 계정이 잠길 수 있는 실패는 재시도하지 않는다.
+NO_RETRY_CODES = frozenset({
+    "invalid_game_count",
+    "credentials_missing",
+    "dependencies_missing",
+    "wrong_credentials",
+    "account_locked",
+    "dormant_account",
+    "login_rejected",
+    "password_change_notice",
+    "password_notice_defer_failed",
+    "authentication_unverified",
+    "invalid_rsa_key",
+})
+
+
+def retryable(outcome: PurchaseOutcome) -> bool:
+    """구매 요청이 아직 나가지 않은 일시적 실패만 재시도 대상으로 본다.
+
+    구매 POST는 단계를 ``purchase``로 바꾼 뒤에만 나간다. 그러므로 구매 단계의 결과
+    (``unconfirmed``·``rejected``·``ok``)는 응답을 잃었더라도 티켓이 이미 구매됐을 수 있어
+    절대 재시도하지 않는다.
+    """
+    if outcome.status not in ("error", "unavailable"):
+        return False
+    if outcome.stage == "purchase":
+        return False  # 방어적 확인: 구매 요청 이후 결과는 어떤 경우에도 재시도 금지.
+    return outcome.code not in NO_RETRY_CODES
+
+
+def buy_with_retry(games: int, dry_run: bool = False, *, attempts: int = DEFAULT_ATTEMPTS,
+                   delay: float = DEFAULT_RETRY_DELAY, budget: float = RETRY_BUDGET_SECONDS,
+                   attempt=None, sleep=None, clock=None, on_retry=None) -> PurchaseOutcome:
+    """구매 요청 전 단계에서 실패했을 때만 같은 실행 안에서 다시 시도한다.
+
+    시도마다 새 세션으로 로그인 → 준비 서버 → 회차 확인 → 구매 요청 1회를 처음부터 진행한다.
+    구매 요청이 나간 뒤의 결과는 재시도하지 않으므로 중복 구매가 생기지 않는다.
+    중간 실패는 ``on_retry``로만 알리고(로그), 최종 결과 하나를 호출자에게 돌려준다.
+    """
+    run = attempt or buy_from_environment
+    pause = sleep or time.sleep
+    now = clock or time.monotonic
+    started = now()
+    try_started = started
+    outcome = run(games, dry_run)
+    last_cost = now() - try_started
+    for number in range(2, attempts + 1):
+        if not retryable(outcome):
+            return outcome
+        # 남은 시간이 다음 시도에 모자라면 워크플로 제한을 넘기지 않도록 여기서 멈춘다.
+        if now() - started + delay + last_cost >= budget:
+            return outcome
+        if on_retry is not None:
+            on_retry(number - 1, outcome, delay)
+        pause(delay)
+        try_started = now()
+        outcome = run(games, dry_run)
+        last_cost = now() - try_started
+    return outcome
