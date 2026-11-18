@@ -6,7 +6,7 @@
 
 ## 실행
 
-Python 3.9 이상에서 저장소 루트에서 실행합니다. 외부 패키지 설치나 환경 변수 설정은 필요하지 않습니다.
+Python 3.10 이상에서 저장소 루트에서 실행합니다. 외부 패키지 설치나 환경 변수 설정은 필요하지 않습니다.
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -78,7 +78,7 @@ python3 -m monitor buy --games 1 --diagnostic --notify    # 실제 구매 후 Di
 python3 -m monitor check --round 1246
 ```
 
-로그인 없이 공개 당첨번호를 조회해 `records/purchases.csv`의 해당 회차 번호와 대조합니다. `Check Lotto Winning (Saturday)` 워크플로가 토요일 21:30 KST에 실행해 결과를 Discord로 보내고 `records/draws.csv`, `records/winnings.csv`에 커밋합니다. 자세한 내용은 [토요일 당첨 확인](docs/winning.md)을 확인하세요.
+로그인 없이 공개 당첨번호를 조회해 `records/purchases.csv`의 해당 회차 번호와 대조합니다. `Check Lotto Winning (Saturday)` 워크플로가 토요일 21:30 KST에 실행하고, 당첨번호 발표가 늦어지면 일요일 09:00 KST에 한 번 더 확인해 결과를 Discord로 보내고 `records/draws.csv`, `records/winnings.csv`에 커밋합니다. 자세한 내용은 [토요일 당첨 확인](docs/winning.md)을 확인하세요.
 
 ## 통계
 
@@ -86,7 +86,7 @@ python3 -m monitor check --round 1246
 python3 -m monitor stats
 ```
 
-구매·당첨 기록과 동행복권에서 내보낸 과거 구매내역(`records/history.csv`, 2015~2026-09)으로 [`records/STATS.md`](records/STATS.md)를 만듭니다. 구매액·당첨금·손익·회수율, 등수와 일치 개수 분포, 회차별·월별 표, 번호 빈도를 담으며 기록이 커밋될 때마다 자동으로 갱신됩니다. 잔액은 포함하지 않습니다. 자세한 내용은 [통계](docs/stats.md)를 확인하세요.
+구매·당첨 기록과 동행복권에서 내보낸 과거 구매내역(`records/history.csv`, 2015~2026-10)으로 [`records/STATS.md`](records/STATS.md)를 만듭니다. 구매액·당첨금·손익·회수율, 등수와 일치 개수 분포, 회차별·월별 표, 번호 빈도를 담으며 기록이 커밋될 때마다 자동으로 갱신됩니다. 잔액은 포함하지 않습니다. 자세한 내용은 [통계](docs/stats.md)를 확인하세요.
 
 ## 문서
 

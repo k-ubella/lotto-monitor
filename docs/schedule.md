@@ -20,6 +20,8 @@ on:
       timezone: "Asia/Seoul"
 ```
 
+> GitHub Actions의 `schedule`은 시간대를 지정하는 키를 받지 않는다. `timezone`은 적용되지 않고 `cron`은 UTC로 해석된다. 위 설정은 변경 전 기록이며, 지금 운영 중인 워크플로는 UTC 표기(`0 0 * * 6` = 토 09:00 KST)를 쓴다.
+
 GitHub에서 워크플로가 `active`이며 설정한 예약이 기본 브랜치에 저장된 것을 확인했다. 설정 후 아직 예약 시각이 도래하지 않아 첫 예약 실행은 미검증 상태다. 동일 코드는 실제 계정으로 잔액 조회·Discord 전송·메시지 재조회까지 수동 검증했다.
 
 [GitHub 공식 예약 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)에 따르면 혼잡 시 예약 작업이 지연되거나 누락될 수 있다. 오전 9시 정각 도착을 보장하는 방식은 아니다. 예약 작업은 기본 브랜치의 워크플로로 실행한다.
