@@ -18,7 +18,8 @@ def shortage_lines(balance_krw: int | None, need: int = WEEKLY_PURCHASE_KRW) -> 
     """Top-up warning for a deposit that cannot cover `need`; empty when it can."""
     if balance_krw is None or balance_krw >= need:
         return []
-    return [SHORTAGE_HEADLINE, f"잔액이 {need:,}원보다 적습니다. **{need - balance_krw:,}원 이상 충전**하세요."]
+    return [SHORTAGE_HEADLINE,
+            f"**{need - balance_krw:,}원 이상 충전**하시면 다음 주 평일 구매({need:,}원)가 가능합니다."]
 
 
 def footer_time(observed_at: str) -> str:
@@ -94,7 +95,6 @@ def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "",
             lines.append(f"✅ 다음 주 평일 자동 구매({WEEKLY_PURCHASE_KRW:,}원) 가능")
         else:
             lines += shortage_lines(result.balance_krw)
-            lines.append(f"다음 주 평일 자동 구매에 {WEEKLY_PURCHASE_KRW:,}원이 필요합니다.")
     else:
         title = "잔액 확인 불가" if result.status == "unavailable" else "잔액 조회 실패"
         from .reasons import explain
