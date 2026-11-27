@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from monitor.__main__ import main
-from monitor.balance import BalanceResult, format_notification, parse_balance
+from monitor.balance import BalanceResult, format_balance_alert, format_notification, parse_balance
 from monitor.records import append_result, read_results
 
 
@@ -55,6 +55,29 @@ class BalanceTests(unittest.TestCase):
         self.assertIn("lotto-monitor / fixture", text)
         self.assertIn("12,000원", text)
         self.assertIn("2026-10-09T17:00:00+09:00", text)
+
+
+class DepositWarningTests(unittest.TestCase):
+    def alert(self, balance_krw):
+        return format_balance_alert(BalanceResult("2026-11-28T09:00:00+09:00", "ok", balance_krw, "dhlottery"))
+
+    def test_weekly_check_warns_below_the_week_cost(self):
+        short = self.alert(3000)
+        self.assertIn("⚠️ **예치금 부족 — 충전 필요**", short)
+        self.assertIn("**2,000원 이상 충전**", short)
+        self.assertIn("동행복권 예치금 3,000원", short)
+
+    def test_weekly_check_is_quiet_at_or_above_the_week_cost(self):
+        for balance_krw in (5000, 12000):
+            with self.subTest(balance_krw=balance_krw):
+                message = self.alert(balance_krw)
+                self.assertNotIn("예치금 부족", message)
+                self.assertIn("다음 주 평일 자동 구매(5,000원) 가능", message)
+
+    def test_a_failed_read_never_shows_a_warning_or_a_zero_balance(self):
+        message = format_balance_alert(BalanceResult("2026-11-28T09:00:00+09:00", "unavailable", None, "dhlottery"), "balance", "access_denied")
+        self.assertIn("잔액 확인 불가", message)
+        self.assertNotIn("예치금 부족", message)
 
 
 class RecordAndCliTests(unittest.TestCase):

@@ -63,6 +63,15 @@ class PurchaseTests(unittest.TestCase):
         self.assertLessEqual(len(message), 2000)
         self.assertNotIn("44", outcome.diagnostic())
 
+    def test_purchase_message_warns_when_the_deposit_is_left_short(self):
+        short = buyer(purchase_session(response(SUCCESS), response({"data": {"userMndp": {"totalAmt": 1000}}}))).buy("example", "example", 2)
+        message = format_purchase(short)
+        self.assertIn("남은 잔액 **1,000원**", message)
+        self.assertIn("⚠️ **예치금 부족 — 충전 필요**", message)
+        self.assertIn("**4,000원 이상 충전**", message)
+        enough = buyer(purchase_session(response(SUCCESS), response({"data": {"userMndp": {"totalAmt": 8000}}}))).buy("example", "example", 2)
+        self.assertNotIn("예치금 부족", format_purchase(enough))
+
     def test_records_keep_numbers_but_never_balance(self):
         outcome = buyer(purchase_session(response(SUCCESS), response({"data": {"userMndp": {"totalAmt": 3000}}}))).buy("example", "example", 2)
         with tempfile.TemporaryDirectory() as folder:

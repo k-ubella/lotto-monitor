@@ -8,7 +8,17 @@ import re
 
 
 KST = timezone(timedelta(hours=9))
+GAME_PRICE_KRW = 1000
 WEEKLY_PURCHASE_KRW = 5000  # 월~금 1게임씩
+WEEKLY_GAME_LIMIT = WEEKLY_PURCHASE_KRW // GAME_PRICE_KRW  # 인터넷 구매 회차 한도 = 5게임
+SHORTAGE_HEADLINE = "⚠️ **예치금 부족 — 충전 필요**"
+
+
+def shortage_lines(balance_krw: int | None, need: int = WEEKLY_PURCHASE_KRW) -> list[str]:
+    """Top-up warning for a deposit that cannot cover `need`; empty when it can."""
+    if balance_krw is None or balance_krw >= need:
+        return []
+    return [SHORTAGE_HEADLINE, f"잔액이 {need:,}원보다 적습니다. **{need - balance_krw:,}원 이상 충전**하세요."]
 
 
 def footer_time(observed_at: str) -> str:
@@ -83,7 +93,8 @@ def format_balance_alert(result: BalanceResult, stage: str = "", code: str = "",
         if result.balance_krw >= WEEKLY_PURCHASE_KRW:
             lines.append(f"✅ 다음 주 평일 자동 구매({WEEKLY_PURCHASE_KRW:,}원) 가능")
         else:
-            lines.append(f"⚠️ 다음 주 평일 자동 구매에 {WEEKLY_PURCHASE_KRW:,}원이 필요합니다. **{WEEKLY_PURCHASE_KRW - result.balance_krw:,}원 이상 충전**하세요.")
+            lines += shortage_lines(result.balance_krw)
+            lines.append(f"다음 주 평일 자동 구매에 {WEEKLY_PURCHASE_KRW:,}원이 필요합니다.")
     else:
         title = "잔액 확인 불가" if result.status == "unavailable" else "잔액 조회 실패"
         from .reasons import explain

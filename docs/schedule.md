@@ -1,6 +1,16 @@
 # 잔액 알림 예약 운영
 
-> 2026년 10월 9일 실행 위치 변경: 이 저장소의 `.github/workflows/balance.yml`(`Balance Notification (Saturday)`)로 옮겼다. 매주 토 09:00 KST(`0 0 * * 6` UTC)에 이 저장소의 `LOTTO_USERNAME`, `LOTTO_PASSWORD`, `DISCORD_WEBHOOK_URL` Secrets로 실행한다. Discord 메시지는 예치금과 다음 주 평일 구매액(5,000원) 충족 여부를 표시하고, 부족하면 충전할 금액을 알린다. 중복 알림을 막기 위해 `vibe-lotto`의 `Monitor Live Balance Notification`은 비활성화했다. 아래는 변경 전 기록이다.
+> 2026년 10월 9일 실행 위치 변경: 이 저장소의 `.github/workflows/balance.yml`(`Balance Notification (Saturday)`)로 옮겼다. 매주 토 09:00 KST(`0 0 * * 6` UTC)에 이 저장소의 `LOTTO_USERNAME`, `LOTTO_PASSWORD`, `DISCORD_WEBHOOK_URL` Secrets로 실행한다. Discord 메시지는 예치금과 다음 주 평일 구매액(5,000원) 충족 여부를 표시하고, 부족하면 `⚠️ 예치금 부족 — 충전 필요`와 충전할 금액을 알린다. 중복 알림을 막기 위해 `vibe-lotto`의 `Monitor Live Balance Notification`은 비활성화했다. 아래는 변경 전 기록이다.
+
+## 토요일 일정
+
+| 시각 (KST) | 작업 | 상태 |
+| --- | --- | --- |
+| 09:00 | 잔액 알림, 5,000원 미만 충전 경고 (`balance.yml`) | 운영 중 |
+| 10:15 | 미구매분 보충 구매 (`buy-catchup.yml`, `Top Up Lotto (Saturday)`) | 워크플로 파일을 저장소에 추가해야 켜진다 — [토요일 보충 구매](catchup.md) |
+| 21:30 | 당첨 확인 (`check-winning.yml`) | 운영 중 |
+
+보충 구매는 실제 구매 시점의 서울 시각이 토 20:00 판매 마감 전인지 코드가 다시 확인하므로, 예약이 5~6시간 지연되어도 다음 회차를 침범하지 않는다.
 
 설정일: 2026년 10월 9일, 한국시간.
 

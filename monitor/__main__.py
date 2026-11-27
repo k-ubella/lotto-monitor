@@ -31,6 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     buy.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드만 출력")
     buy.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (성공 시 번호·잔액 포함)")
     buy.add_argument("--record", type=Path, help="구매 요청을 보낸 경우 회차·번호를 CSV에 추가 (잔액 제외)")
+    top_up = commands.add_parser("catchup", help="토요일 보충 구매: 이번 회차 5게임 한도까지 예치금 범위에서 채움")
+    top_up.add_argument("--records", type=Path, default=Path("records"), help="구매 기록 폴더 또는 CSV (기본 records)")
+    top_up.add_argument("--dry-run", action="store_true", help="잔액·회차·부족 수량까지 확인하고 구매 요청은 보내지 않음")
+    top_up.add_argument("--diagnostic", action="store_true", help="번호·잔액 없이 단계·진단 코드·건수만 출력")
+    top_up.add_argument("--notify", action="store_true", help="결과를 Discord로 전송 (성공 시 번호·잔액 포함)")
+    top_up.add_argument("--record", type=Path, help="구매 요청을 보낸 경우 회차·번호를 CSV에 추가 (잔액 제외)")
     draw = commands.add_parser("check", help="공개 당첨번호와 records/purchases.csv를 대조 (로그인 없음)")
     draw.add_argument("--round", type=int, help="확인할 회차 (기본: 가장 최근 추첨 회차)")
     draw.add_argument("--records", type=Path, default=Path("records"), help="구매 기록 폴더 (기본 records)")
@@ -67,6 +73,30 @@ def main(argv: list[str] | None = None) -> int:
             if args.notify:
                 from .discord import send_message
                 delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_purchase(outcome))
+                print(json.dumps({"delivery": delivery.code}))
+                if not delivery.ok:
+                    return 1
+            return 0 if outcome.ok else 1
+        if args.command == "catchup":
+            from .catchup import catchup_with_retry, format_catchup
+            from .purchase import append_records
+
+            def report_top_up_retry(failed_attempt, failed, wait):
+                # 구매 요청 전 중간 실패는 진단 값만 남기고, 알림은 마지막 결과에만 보낸다.
+                if args.diagnostic:
+                    print(json.dumps({"retry": failed_attempt, "status": failed.status,
+                                      "stage": failed.stage, "code": failed.code,
+                                      "retry_in_seconds": int(wait)}))
+                else:
+                    print(f"{failed_attempt}번째 시도 실패(구매 요청 전 · {failed.code}) — {int(wait)}초 후 재시도")
+
+            outcome = catchup_with_retry(args.records, args.dry_run, on_retry=report_top_up_retry)
+            if args.record is not None:
+                append_records(args.record, outcome)
+            print(outcome.diagnostic() if args.diagnostic else format_catchup(outcome))
+            if args.notify:
+                from .discord import send_message
+                delivery = send_message(os.environ.get("DISCORD_WEBHOOK_URL", ""), format_catchup(outcome))
                 print(json.dumps({"delivery": delivery.code}))
                 if not delivery.ok:
                     return 1

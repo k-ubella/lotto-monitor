@@ -10,7 +10,8 @@ import os
 import re
 import time
 
-from .balance import KST, footer_time as _footer_time
+from .balance import KST, GAME_PRICE_KRW, WEEKLY_GAME_LIMIT, footer_time as _footer_time
+from .balance import shortage_lines as balance_shortage_lines
 from .reasons import explain
 from .live import BalanceReader, ReadFailure, encrypt_credentials, transport_code
 
@@ -22,7 +23,14 @@ READY_URL = GAME_ORIGIN + "/olotto/game/egovUserReadySocket.json"
 BUY_URL = GAME_ORIGIN + "/olotto/game/execBuy.do"
 ROUND_API = "/lt645/selectThsLt645Info.do"
 SLOTS = "ABCDE"
+SLOT_LIMIT = WEEKLY_GAME_LIMIT  # 인터넷 구매는 회차당 5게임(5,000원)까지
 MODES = {"1": "수동", "2": "반자동", "3": "자동"}
+# A failure that says "come back later" rather than "this request is wrong": retried as `unavailable`.
+UNAVAILABLE_CODES = frozenset({
+    "credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json",
+    "balance_missing", "login_rejected", "password_change_notice", "password_notice_defer_failed",
+    "wrong_credentials", "account_locked", "dormant_account",
+})
 GAME_HEADERS = {"Origin": GAME_ORIGIN, "Referer": GAME_PAGE}
 XHR_HEADERS = {**GAME_HEADERS, "X-Requested-With": "XMLHttpRequest", "Accept": "application/json, text/javascript, */*; q=0.01"}
 
@@ -93,14 +101,22 @@ def _footer(outcome: PurchaseOutcome) -> str:
     return _footer_time(outcome.observed_at)
 
 
+def format_purchased_games(games: tuple[Game, ...]) -> list[str]:
+    """Numbers in a code block so they line up like a printed ticket."""
+    lines = ["```"]
+    lines += [f"{g.slot}  {g.mode}  " + "  ".join(f"{n:02d}" for n in g.numbers) for g in games]
+    lines.append("```")
+    return lines
+
+
 def format_purchase(outcome: PurchaseOutcome) -> str:
     """Discord markdown; numbers are aligned in a code block so they read like a ticket."""
     round_label = f"{outcome.round}회" if outcome.round else "회차 미확인"
     if outcome.status == "ok":
-        lines = [f"🎟️ **로또6/45 {round_label} · {len(outcome.games)}게임 구매 완료** ({len(outcome.games) * 1000:,}원)", "```"]
-        lines += [f"{g.slot}  {g.mode}  " + "  ".join(f"{n:02d}" for n in g.numbers) for g in outcome.games]
-        lines.append("```")
+        lines = [f"🎟️ **로또6/45 {round_label} · {len(outcome.games)}게임 구매 완료** ({len(outcome.games) * GAME_PRICE_KRW:,}원)"]
+        lines += format_purchased_games(outcome.games)
         lines.append(f"💰 남은 잔액 **{outcome.balance_krw:,}원**" if outcome.balance_krw is not None else "💰 남은 잔액 확인 불가")
+        lines += balance_shortage_lines(outcome.balance_krw)
     elif outcome.status == "dry_run":
         lines = [f"🧪 **점검 실행 · {round_label} 구매 준비 확인**", "실제 구매는 하지 않았습니다."]
     elif outcome.status == "unconfirmed":
@@ -148,6 +164,16 @@ def append_records(path, outcome: PurchaseOutcome) -> int:
     return len(rows)
 
 
+@dataclass(frozen=True)
+class PurchasePlan:
+    """What `prepare` learned before any purchase request: deposit, round and draw dates."""
+    balance_krw: int
+    round: int
+    direct: str
+    draw_date: str
+    limit_date: str
+
+
 class LottoPurchaser(BalanceReader):
     def _share_session_cookies(self) -> None:
         # The login cookie is issued for www; the game server on ol needs the same session.
@@ -167,77 +193,89 @@ class LottoPurchaser(BalanceReader):
             raise ReadFailure("round_missing")
         return int(value), "api"
 
-    def buy(self, username: str, password: str, games: int, dry_run: bool = False) -> PurchaseOutcome:
-        now = datetime.now(timezone.utc)
-        observed = now.astimezone(KST).isoformat(timespec="seconds")
-        failed = lambda status, code, **kw: PurchaseOutcome(observed, status, self.stage, code, games, **kw)
-        if not 1 <= games <= 5:
-            return failed("error", "invalid_game_count")
-        try:
-            self.login(username, password)
-            self._share_session_cookies()
-            self.stage = "ready_socket"
-            ready = self._json(self._request("POST", READY_URL, extra_headers=XHR_HEADERS))
-            direct = ready.get("ready_ip") if isinstance(ready, dict) else None
-            if not isinstance(direct, str) or not direct:
-                raise ReadFailure("ready_ip_missing")
-            self.stage = "game_page"
-            page = input_values(self._request("GET", GAME_PAGE, extra_headers={"Referer": ORIGIN_MAIN}).text)
-            round_no, round_source = self._current_round(page)
-            draw_date, limit_date = page.get("ROUND_DRAW_DATE"), page.get("WAMT_PAY_TLMT_END_DT")
-            dates_source = "page"
-            if not draw_date or not limit_date:
-                draw_date, limit_date = next_draw_dates(now)
-                dates_source = "computed"
-            sources = {**self.detail, "round_source": round_source, "dates_source": dates_source}
-        except ReadFailure as failure:
-            unavailable = failure.code in {"credentials_missing", "access_denied", "rate_limited", "authentication_unverified", "html_instead_of_json", "balance_missing", "login_rejected",
-                                        "password_change_notice", "password_notice_defer_failed", "wrong_credentials", "account_locked", "dormant_account"}
-            return failed("unavailable" if unavailable else "error", failure.code, remote_message=self.reason, sources=self.detail)
-        except Exception as error:
-            return failed("error", transport_code(error))
-        if dry_run:
-            return PurchaseOutcome(observed, "dry_run", self.stage, "purchase_ready", games, round_no, sources=sources)
+    def prepare(self, username: str, password: str) -> PurchasePlan:
+        """Log in (which proves itself by reading the deposit), then read the on-sale round.
 
+        Everything here happens *before* a purchase request, so a failure may be retried.
+        """
+        balance = self.login(username, password)
+        self._share_session_cookies()
+        self.stage = "ready_socket"
+        ready = self._json(self._request("POST", READY_URL, extra_headers=XHR_HEADERS))
+        direct = ready.get("ready_ip") if isinstance(ready, dict) else None
+        if not isinstance(direct, str) or not direct:
+            raise ReadFailure("ready_ip_missing")
+        self.stage = "game_page"
+        page = input_values(self._request("GET", GAME_PAGE, extra_headers={"Referer": ORIGIN_MAIN}).text)
+        round_no, round_source = self._current_round(page)
+        draw_date, limit_date = page.get("ROUND_DRAW_DATE"), page.get("WAMT_PAY_TLMT_END_DT")
+        dates_source = "page"
+        if not draw_date or not limit_date:
+            draw_date, limit_date = next_draw_dates(datetime.now(timezone.utc))
+            dates_source = "computed"
+        self.detail = {**self.detail, "round_source": round_source, "dates_source": dates_source}
+        return PurchasePlan(balance, round_no, direct, draw_date, limit_date)
+
+    def submit(self, plan: PurchasePlan, games: int, observed: str) -> PurchaseOutcome:
+        """Send the one purchase request. Never retried, here or by a retry wrapper."""
         self.stage = "purchase"
         data = {
-            "round": str(round_no),
-            "direct": direct,
-            "nBuyAmount": str(1000 * games),
+            "round": str(plan.round),
+            "direct": plan.direct,
+            "nBuyAmount": str(GAME_PRICE_KRW * games),
             "param": json.dumps([{"genType": "0", "arrGameChoiceNum": None, "alpabet": s} for s in SLOTS[:games]]),
-            "ROUND_DRAW_DATE": draw_date,
-            "WAMT_PAY_TLMT_END_DT": limit_date,
+            "ROUND_DRAW_DATE": plan.draw_date,
+            "WAMT_PAY_TLMT_END_DT": plan.limit_date,
             "gameCnt": str(games),
             "saleMdaDcd": "10",
         }
+        failed = lambda status, code, **kw: PurchaseOutcome(observed, status, self.stage, code, games, **kw)
+        sources = dict(self.detail)
         try:
-            # Never retried (here or by buy_with_retry): a lost response may still mean the ticket was bought.
+            # Never retried (here or by with_retry): a lost response may still mean the ticket was bought.
             response = self._request("POST", BUY_URL, data=data, extra_headers={**XHR_HEADERS, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
             if getattr(response, "encoding", None) == "ISO-8859-1":
                 response.encoding = "euc-kr"
             body = self._json(response)
         except ReadFailure as failure:
-            return failed("unconfirmed", failure.code, round=round_no, sources=sources)
+            return failed("unconfirmed", failure.code, round=plan.round, sources=sources)
         except Exception as error:
-            return failed("unconfirmed", transport_code(error), round=round_no, sources=sources)
+            return failed("unconfirmed", transport_code(error), round=plan.round, sources=sources)
         result = body.get("result") if isinstance(body, dict) else None
         if not isinstance(result, dict):
-            return failed("unconfirmed", "unexpected_purchase_response", round=round_no, sources=sources)
+            return failed("unconfirmed", "unexpected_purchase_response", round=plan.round, sources=sources)
         if str(result.get("resultMsg", "")).upper() != "SUCCESS":
             message = str(result.get("resultMsg") or "")[:200] or None
-            return failed("rejected", "purchase_rejected", round=round_no, remote_message=message, sources=sources)
+            return failed("rejected", "purchase_rejected", round=plan.round, remote_message=message, sources=sources)
         try:
             bought = tuple(parse_game(v) for v in result.get("arrGameChoiceNum") or [])
-            bought_round = int(result.get("buyRound") or round_no)
+            bought_round = int(result.get("buyRound") or plan.round)
         except (ValueError, TypeError):
-            return failed("unconfirmed", "unreadable_tickets", round=round_no, sources=sources)
+            return failed("unconfirmed", "unreadable_tickets", round=plan.round, sources=sources)
         if not bought:
-            return failed("unconfirmed", "unreadable_tickets", round=round_no, sources=sources)
+            return failed("unconfirmed", "unreadable_tickets", round=plan.round, sources=sources)
         try:
             balance = self.read_balance()
         except Exception:
             balance = None  # The purchase itself succeeded; the balance is informational.
         return PurchaseOutcome(observed, "ok", "purchase", "purchase_verified", games, bought_round, bought, balance, sources=sources)
+
+    def buy(self, username: str, password: str, games: int, dry_run: bool = False) -> PurchaseOutcome:
+        now = datetime.now(timezone.utc)
+        observed = now.astimezone(KST).isoformat(timespec="seconds")
+        failed = lambda status, code, **kw: PurchaseOutcome(observed, status, self.stage, code, games, **kw)
+        if not 1 <= games <= SLOT_LIMIT:
+            return failed("error", "invalid_game_count")
+        try:
+            plan = self.prepare(username, password)
+        except ReadFailure as failure:
+            return failed("unavailable" if failure.code in UNAVAILABLE_CODES else "error",
+                          failure.code, remote_message=self.reason, sources=self.detail)
+        except Exception as error:
+            return failed("error", transport_code(error))
+        if dry_run:
+            return PurchaseOutcome(observed, "dry_run", self.stage, "purchase_ready", games, plan.round, sources=dict(self.detail))
+        return self.submit(plan, games, observed)
 
 
 
@@ -290,21 +328,18 @@ def retryable(outcome: PurchaseOutcome) -> bool:
     return outcome.code not in NO_RETRY_CODES
 
 
-def buy_with_retry(games: int, dry_run: bool = False, *, attempts: int = DEFAULT_ATTEMPTS,
-                   delay: float = DEFAULT_RETRY_DELAY, budget: float = RETRY_BUDGET_SECONDS,
-                   attempt=None, sleep=None, clock=None, on_retry=None) -> PurchaseOutcome:
-    """구매 요청 전 단계에서 실패했을 때만 같은 실행 안에서 다시 시도한다.
+def with_retry(run, *, attempts: int = DEFAULT_ATTEMPTS, delay: float = DEFAULT_RETRY_DELAY,
+               budget: float = RETRY_BUDGET_SECONDS, sleep=None, clock=None, on_retry=None):
+    """Call `run()` again only while the result is a failure before any purchase request.
 
-    시도마다 새 세션으로 로그인 → 준비 서버 → 회차 확인 → 구매 요청 1회를 처음부터 진행한다.
-    구매 요청이 나간 뒤의 결과는 재시도하지 않으므로 중복 구매가 생기지 않는다.
-    중간 실패는 ``on_retry``로만 알리고(로그), 최종 결과 하나를 호출자에게 돌려준다.
+    A lost purchase response may still mean the ticket was bought, so `retryable` refuses
+    every result whose request already went out. Retrying therefore cannot buy twice.
     """
-    run = attempt or buy_from_environment
     pause = sleep or time.sleep
     now = clock or time.monotonic
     started = now()
     try_started = started
-    outcome = run(games, dry_run)
+    outcome = run()
     last_cost = now() - try_started
     for number in range(2, attempts + 1):
         if not retryable(outcome):
@@ -316,6 +351,20 @@ def buy_with_retry(games: int, dry_run: bool = False, *, attempts: int = DEFAULT
             on_retry(number - 1, outcome, delay)
         pause(delay)
         try_started = now()
-        outcome = run(games, dry_run)
+        outcome = run()
         last_cost = now() - try_started
     return outcome
+
+
+def buy_with_retry(games: int, dry_run: bool = False, *, attempts: int = DEFAULT_ATTEMPTS,
+                   delay: float = DEFAULT_RETRY_DELAY, budget: float = RETRY_BUDGET_SECONDS,
+                   attempt=None, sleep=None, clock=None, on_retry=None) -> PurchaseOutcome:
+    """구매 요청 전 단계에서 실패했을 때만 같은 실행 안에서 다시 시도한다.
+
+    시도마다 새 세션으로 로그인 → 준비 서버 → 회차 확인 → 구매 요청 1회를 처음부터 진행한다.
+    구매 요청이 나간 뒤의 결과는 재시도하지 않으므로 중복 구매가 생기지 않는다.
+    중간 실패는 ``on_retry``로만 알리고(로그), 최종 결과 하나를 호출자에게 돌려준다.
+    """
+    attempt = attempt or buy_from_environment
+    return with_retry(lambda: attempt(games, dry_run), attempts=attempts, delay=delay, budget=budget,
+                      sleep=sleep, clock=clock, on_retry=on_retry)

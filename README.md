@@ -72,6 +72,25 @@ python3 -m monitor buy --games 1 --diagnostic --notify    # 실제 구매 후 Di
 
 `LOTTO_USERNAME`, `LOTTO_PASSWORD` 환경 변수로 로그인한 뒤 구매 서버 준비 → 회차 확인 → 구매 요청 1회를 보냅니다. 구매 요청 자체는 시도당 1회이며 재시도하지 않습니다. 대신 로그인·세션·회차 조회처럼 **구매 요청 전 단계**에서 일시적으로 실패하면 60초 간격으로 최대 2회(총 3회) 같은 실행 안에서 다시 시도합니다. 구매 요청이 나간 뒤의 결과(`unconfirmed`·`rejected`)는 재시도하지 않으므로 중복 구매가 생기지 않습니다. 응답이 끊기면 `unconfirmed`로 끝나며 이미 구매됐을 수 있으므로 구매 내역을 확인한 뒤 재실행하세요. 성공 시 번호와 잔액은 Discord 메시지에만 포함하고, `--diagnostic` 로그에는 단계·진단 코드·게임 수만 남깁니다. `--record 파일`을 주면 구매 요청을 보낸 실행의 회차·번호를 CSV에 추가합니다(잔액 제외). 워크플로는 이를 [`records/purchases.csv`](records/purchases.csv)에 커밋합니다. 2026년 10월 9일 실제 계정으로 점검 실행과 1게임 구매를 확인했습니다. 자세한 내용은 [자동 구매 운영](docs/purchase.md)을 확인하세요.
 
+## 잔액 경고
+
+주간 잔액 알림(`Balance Notification (Saturday)`)과 평일 구매 알림은 잔액이 5,000원 미만이면 `⚠️ 예치금 부족 — 충전 필요`와 충전할 금액을 함께 보여 줍니다.
+
+## 토요일 보충 구매
+
+평일에 못 산 게임이 있으면 토요일에 회차 한도(5게임)까지 보충합니다. 잔액이 모자라면 잔액이 허락하는 만큼만(1,000원 단위) 삽니다.
+
+```bash
+python3 -m monitor catchup --records records --dry-run --diagnostic   # 계획만 확인
+python3 -m monitor catchup --records records --diagnostic --notify   # 실제 보충 구매 후 Discord 알림
+```
+
+이미 5게임이거나 잔액이 1,000원 미만이면 구매 요청을 보내지 않고 정상 종료합니다. 토요일 20:00 KST 마감 이후(예약 실행 지연)에는
+다음 회차로 넘어가 회차 한도를 깨뜨리므로 구매하지 않고 생략합니다. 구매 요청은 시도당 1회이며,
+구매 요청 전 단계의 실패만 같은 실행 안에서 재시도합니다. 예약은 `.github/workflows/buy-catchup.yml`(토 10:15 KST)이며,
+파일 내용과 계산 기준은 [토요일 보충 구매](docs/catchup.md)에 정리했습니다. 현재 이 워크플로 파일은
+Pickle GitHub 앱의 `workflows` 권한 제한으로 아직 저장소에 추가되지 않았습니다.
+
 ## 토요일 당첨 확인
 
 ```bash
@@ -97,6 +116,7 @@ python3 -m monitor stats
 - [Discord 전송 검증](docs/discord-delivery.md): 전송 확인·재조회·오류 처리
 - [예약 운영 안내](docs/schedule.md): 토요일 오전 9시 알림과 자격 증명 사용 방식
 - [자동 구매 운영](docs/purchase.md): 월~금 구매 워크플로, Secrets, 점검 실행과 중단 방법
+- [토요일 보충 구매](docs/catchup.md): 회차 한도까지 채우는 계산, 잔액·마감 시각 안전 장치, `buy-catchup.yml` 워크플로 내용
 - [토요일 당첨 확인](docs/winning.md): 당첨번호 대조, 등수 계산, 기록 파일
 - [통계](docs/stats.md): `records/STATS.md` 구성과 계산 기준
 
